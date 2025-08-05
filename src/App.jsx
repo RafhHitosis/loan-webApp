@@ -1,9 +1,14 @@
-import React, { useState, useEffect, createContext, useContext } from "react";
+import React, {
+  useState,
+  useEffect,
+  createContext,
+  useContext,
+  useMemo,
+} from "react";
 import {
   Plus,
   Edit3,
   Trash2,
-  BarChart3,
   List,
   DollarSign,
   LogOut,
@@ -17,10 +22,13 @@ import {
   AlertTriangle,
   Eye,
   EyeOff,
-  ArrowLeft,
-  Menu,
   Home,
-  Activity,
+  Upload,
+  FileImage,
+  History,
+  Camera,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import {
@@ -38,8 +46,11 @@ import {
   remove,
   onValue,
   off,
+  get,
+  update,
 } from "firebase/database";
 
+// Firebase Config
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -50,10 +61,13 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const database = getDatabase(app);
+
+// Cloudinary Config
+const CLOUDINARY_UPLOAD_PRESET = "receipt_upload"; // Replace with your preset
+const CLOUDINARY_CLOUD_NAME = "dpiupmmsg"; // Replace with your cloud name
 
 // Auth Context
 const AuthContext = createContext();
@@ -93,25 +107,117 @@ const AuthProvider = ({ children }) => {
 
 const useAuth = () => useContext(AuthContext);
 
-// Loan Service (keeping your existing service)
+// Enhanced Loan Service
 const loanService = {
   getUserLoansRef: (userId) => ref(database, `loans/${userId}`),
+
   addLoan: async (userId, loanData) => {
     const loansRef = loanService.getUserLoansRef(userId);
     return await push(loansRef, {
       ...loanData,
+      remainingAmount: loanData.amount,
+      payments: {}, // Initialize as empty object, not array
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
   },
+
   updateLoan: async (userId, loanId, loanData) => {
+    if (!userId || !loanId) {
+      throw new Error("User ID and Loan ID are required");
+    }
+
     const loanRef = ref(database, `loans/${userId}/${loanId}`);
-    return await set(loanRef, { ...loanData, updatedAt: Date.now() });
+
+    try {
+      // Get current loan data first to preserve payments
+      const currentSnapshot = await get(loanRef);
+      const currentLoan = currentSnapshot.val();
+
+      if (!currentLoan) {
+        throw new Error("Loan not found");
+      }
+
+      // Calculate total paid from payments
+      const payments = currentLoan.payments || {};
+      const totalPaid = Object.values(payments).reduce((sum, payment) => {
+        return sum + (parseFloat(payment.amount) || 0);
+      }, 0);
+
+      // Calculate new remaining amount based on new loan amount
+      const newAmount = parseFloat(loanData.amount) || 0;
+      const newRemainingAmount = Math.max(0, newAmount - totalPaid);
+
+      // Determine new status
+      let newStatus = loanData.status || currentLoan.status || "active";
+      if (newRemainingAmount === 0 && totalPaid > 0) {
+        newStatus = "paid";
+      } else if (newRemainingAmount > 0 && totalPaid > 0) {
+        newStatus = "active"; // Partially paid
+      }
+
+      const updatedLoan = {
+        ...currentLoan, // Preserve existing data including payments
+        ...loanData,
+        amount: newAmount,
+        remainingAmount: newRemainingAmount,
+        status: newStatus,
+        updatedAt: Date.now(),
+        // Ensure payments are preserved
+        payments: currentLoan.payments || {},
+      };
+
+      return await set(loanRef, updatedLoan);
+    } catch (error) {
+      console.error("Error updating loan:", error);
+      throw new Error(`Failed to update loan: ${error.message}`);
+    }
   },
+
+  addPayment: async (userId, loanId, paymentData) => {
+    if (!userId || !loanId) {
+      throw new Error("User ID and Loan ID are required");
+    }
+
+    if (!paymentData.amount || parseFloat(paymentData.amount) <= 0) {
+      throw new Error("Payment amount must be greater than 0");
+    }
+
+    try {
+      const paymentRef = ref(database, `loans/${userId}/${loanId}/payments`);
+      const paymentKey = await push(paymentRef, {
+        ...paymentData,
+        amount: parseFloat(paymentData.amount),
+        timestamp: Date.now(),
+      });
+      return paymentKey.key;
+    } catch (error) {
+      console.error("Error adding payment:", error);
+      throw new Error(`Failed to add payment: ${error.message}`);
+    }
+  },
+
+  // NEW: Method to update loan after payment without losing data
+  updateLoanAfterPayment: async (
+    userId,
+    loanId,
+    newRemainingAmount,
+    newStatus
+  ) => {
+    const updates = {
+      [`loans/${userId}/${loanId}/remainingAmount`]: newRemainingAmount,
+      [`loans/${userId}/${loanId}/status`]: newStatus,
+      [`loans/${userId}/${loanId}/updatedAt`]: Date.now(),
+    };
+
+    return await update(ref(database), updates);
+  },
+
   deleteLoan: async (userId, loanId) => {
     const loanRef = ref(database, `loans/${userId}/${loanId}`);
     return await remove(loanRef);
   },
+
   subscribeToLoans: (userId, callback) => {
     const loansRef = loanService.getUserLoansRef(userId);
     onValue(loansRef, callback);
@@ -119,11 +225,97 @@ const loanService = {
   },
 };
 
-// Enhanced Login Component with mobile-first design
+// Cloudinary Service
+const cloudinaryService = {
+  uploadImage: async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to upload image");
+    }
+
+    return await response.json();
+  },
+};
+
+// Reusable Components
+const Input = ({ icon: Icon, className = "", ...props }) => (
+  <div className="relative">
+    {Icon && (
+      <Icon className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+    )}
+    <input
+      className={`w-full ${
+        Icon ? "pl-12" : "pl-4"
+      } pr-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200 ${className}`}
+      {...props}
+    />
+  </div>
+);
+
+const Button = ({
+  variant = "primary",
+  size = "md",
+  children,
+  className = "",
+  ...props
+}) => {
+  const baseClasses =
+    "font-semibold rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center";
+
+  const variants = {
+    primary:
+      "bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-lg",
+    secondary:
+      "bg-slate-700/50 hover:bg-slate-700 text-slate-300 hover:text-white",
+    danger:
+      "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white",
+    ghost: "text-slate-400 hover:text-slate-200 hover:bg-slate-700/50",
+  };
+
+  const sizes = {
+    sm: "px-3 py-2 text-sm",
+    md: "px-4 py-3",
+    lg: "px-6 py-4",
+  };
+
+  return (
+    <button
+      className={`${baseClasses} ${variants[variant]} ${sizes[size]} ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+};
+
+const Card = ({ children, className = "", hover = true }) => (
+  <div
+    className={`bg-slate-800/60 backdrop-blur-sm border border-slate-600/40 rounded-2xl p-4 ${
+      // Changed from p-6 to p-4
+      hover
+        ? "hover:bg-slate-800/80 transition-all duration-200 transform hover:scale-[1.01]"
+        : ""
+    } ${className}`}
+  >
+    {children}
+  </div>
+);
+
+// Login Component
 const LoginForm = () => {
   const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [formData, setFormData] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -134,17 +326,54 @@ const LoginForm = () => {
     setLoading(true);
     setError("");
 
+    // Client-side validation
+    if (!formData.email.trim()) {
+      setError("Email is required");
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.password) {
+      setError("Password is required");
+      setLoading(false);
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters");
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isSignUp) {
-        await signUp(email, password);
+        await signUp(formData.email, formData.password);
       } else {
-        await signIn(email, password);
+        await signIn(formData.email, formData.password);
       }
     } catch (err) {
-      setError(err.message);
+      // Friendly error messages
+      let errorMessage = err.message;
+      if (errorMessage.includes("user-not-found")) {
+        errorMessage = "No account found with this email";
+      } else if (errorMessage.includes("wrong-password")) {
+        errorMessage = "Incorrect password";
+      } else if (errorMessage.includes("email-already-in-use")) {
+        errorMessage = "An account with this email already exists";
+      } else if (errorMessage.includes("weak-password")) {
+        errorMessage = "Password is too weak";
+      } else if (errorMessage.includes("invalid-email")) {
+        errorMessage = "Invalid email address";
+      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  const updateFormData = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (error) setError(""); // Clear error when user types
   };
 
   return (
@@ -164,34 +393,29 @@ const LoginForm = () => {
           </p>
         </div>
 
-        {error && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm animate-in slide-in-from-top-2 duration-300">
-            {error}
-          </div>
-        )}
+        {/* REPLACE the error div with ErrorMessage component */}
+        <ErrorMessage error={error} />
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="relative">
-            <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="email"
-              placeholder="Email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
-              required
-            />
-          </div>
+          <Input
+            icon={Mail}
+            type="email"
+            placeholder="Email address"
+            value={formData.email}
+            onChange={(e) => updateFormData("email", e.target.value)}
+            required
+          />
 
           <div className="relative">
             <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
             <input
               type={showPassword ? "text" : "password"}
               placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={formData.password}
+              onChange={(e) => updateFormData("password", e.target.value)}
               className="w-full pl-12 pr-12 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
               required
+              minLength="6"
             />
             <button
               type="button"
@@ -206,27 +430,26 @@ const LoginForm = () => {
             </button>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-semibold py-4 rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-          >
+          <Button size="lg" className="w-full" disabled={loading}>
             {loading ? (
-              <div className="flex items-center justify-center">
+              <>
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
                 {isSignUp ? "Creating Account..." : "Signing In..."}
-              </div>
+              </>
             ) : isSignUp ? (
               "Create Account"
             ) : (
               "Sign In"
             )}
-          </button>
+          </Button>
         </form>
 
         <div className="mt-8 text-center">
           <button
-            onClick={() => setIsSignUp(!isSignUp)}
+            onClick={() => {
+              setIsSignUp(!isSignUp);
+              setError(""); // Clear errors when switching
+            }}
             className="text-slate-400 hover:text-emerald-400 transition-colors duration-200"
           >
             {isSignUp
@@ -239,19 +462,36 @@ const LoginForm = () => {
   );
 };
 
-// Enhanced Dashboard Component
+// Dashboard Component
 const Dashboard = ({ loans }) => {
   const calculateSummary = () => {
-    const lentLoans = loans.filter((loan) => loan.type === "lent");
-    const borrowedLoans = loans.filter((loan) => loan.type === "borrowed");
+    if (!Array.isArray(loans)) {
+      return {
+        totalLent: 0,
+        totalBorrowed: 0,
+        activeLentCount: 0,
+        activeBorrowedCount: 0,
+      };
+    }
+
+    const lentLoans = loans.filter((loan) => loan?.type === "lent");
+    const borrowedLoans = loans.filter((loan) => loan?.type === "borrowed");
 
     return {
-      totalLent: lentLoans.reduce((sum, loan) => sum + loan.amount, 0),
-      totalBorrowed: borrowedLoans.reduce((sum, loan) => sum + loan.amount, 0),
-      activeLentCount: lentLoans.filter((loan) => loan.status === "active")
+      totalLent: lentLoans.reduce((sum, loan) => {
+        const remaining =
+          parseFloat(loan?.remainingAmount) || parseFloat(loan?.amount) || 0;
+        return sum + remaining;
+      }, 0),
+      totalBorrowed: borrowedLoans.reduce((sum, loan) => {
+        const remaining =
+          parseFloat(loan?.remainingAmount) || parseFloat(loan?.amount) || 0;
+        return sum + remaining;
+      }, 0),
+      activeLentCount: lentLoans.filter((loan) => loan?.status === "active")
         .length,
       activeBorrowedCount: borrowedLoans.filter(
-        (loan) => loan.status === "active"
+        (loan) => loan?.status === "active"
       ).length,
     };
   };
@@ -259,51 +499,67 @@ const Dashboard = ({ loans }) => {
   const summary = calculateSummary();
   const netPosition = summary.totalLent - summary.totalBorrowed;
 
-  return (
-    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 gap-4">
-        <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-2xl p-6 backdrop-blur-sm transform hover:scale-[1.02] transition-all duration-200">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-emerald-400/80 text-sm font-medium mb-1">
-                Money Lent
-              </p>
-              <p className="text-2xl font-bold text-white mb-1">
-                ₱{summary.totalLent.toLocaleString()}
-              </p>
-              <p className="text-emerald-400/60 text-xs">
-                {summary.activeLentCount} active loans
-              </p>
-            </div>
-            <div className="w-14 h-14 bg-emerald-500/20 rounded-2xl flex items-center justify-center">
-              <TrendingUp className="w-7 h-7 text-emerald-400" />
-            </div>
-          </div>
+  const StatCard = ({
+    title,
+    amount,
+    count,
+    icon: Icon, // eslint-disable-line no-unused-vars
+    gradient,
+    textColor,
+  }) => (
+    <Card
+      className={`bg-gradient-to-br ${gradient} border-${
+        textColor.split("-")[1]
+      }-500/30`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <p className="text-slate-200 text-sm font-medium mb-1">{title}</p>{" "}
+          {/* Changed from textColor/80 to slate-200 */}
+          <p className="text-3xl font-bold text-white mb-1">
+            {" "}
+            {/* Changed text-2xl to text-3xl for better visibility */}₱
+            {amount.toLocaleString()}
+          </p>
+          <p className="text-slate-300 text-xs">{count} active loans</p>{" "}
+          {/* Changed from textColor/60 to slate-300 */}
         </div>
-
-        <div className="bg-gradient-to-br from-red-500/10 to-red-600/5 border border-red-500/20 rounded-2xl p-6 backdrop-blur-sm transform hover:scale-[1.02] transition-all duration-200">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-red-400/80 text-sm font-medium mb-1">
-                Money Borrowed
-              </p>
-              <p className="text-2xl font-bold text-white mb-1">
-                ₱{summary.totalBorrowed.toLocaleString()}
-              </p>
-              <p className="text-red-400/60 text-xs">
-                {summary.activeBorrowedCount} active loans
-              </p>
-            </div>
-            <div className="w-14 h-14 bg-red-500/20 rounded-2xl flex items-center justify-center">
-              <TrendingDown className="w-7 h-7 text-red-400" />
-            </div>
-          </div>
+        <div
+          className={`w-14 h-14 bg-${
+            textColor.split("-")[1]
+          }-500/20 rounded-2xl flex items-center justify-center`}
+        >
+          <Icon className={`w-7 h-7 ${textColor}`} />
         </div>
       </div>
+    </Card>
+  );
 
-      {/* Net Position Card */}
-      <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 border border-slate-600/30 rounded-2xl p-8 text-center backdrop-blur-sm">
+  return (
+    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+      <div className="grid grid-cols-1 gap-4">
+        <StatCard
+          title="Money Lent"
+          amount={summary.totalLent}
+          count={summary.activeLentCount}
+          icon={TrendingUp}
+          gradient="from-emerald-500/10 to-emerald-600/5"
+          textColor="text-emerald-400"
+        />
+        <StatCard
+          title="Money Borrowed"
+          amount={summary.totalBorrowed}
+          count={summary.activeBorrowedCount}
+          icon={TrendingDown}
+          gradient="from-red-500/10 to-red-600/5"
+          textColor="text-red-400"
+        />
+      </div>
+
+      <Card
+        className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 border-slate-600/30 text-center"
+        hover={false}
+      >
         <h3 className="text-slate-400 text-lg font-medium mb-4">
           Net Position
         </h3>
@@ -319,6 +575,281 @@ const Dashboard = ({ loans }) => {
             ? "You are owed more than you owe"
             : "You owe more than you are owed"}
         </p>
+      </Card>
+    </div>
+  );
+};
+
+// Payment History Component
+const PaymentHistory = ({ payments = {} }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Enhanced error handling for payments
+  const paymentsArray = useMemo(() => {
+    if (!payments || typeof payments !== "object") {
+      return [];
+    }
+
+    try {
+      return Object.values(payments)
+        .filter((payment) => payment && typeof payment === "object")
+        .map((payment) => ({
+          ...payment,
+          amount: parseFloat(payment.amount) || 0,
+          timestamp: payment.timestamp || Date.now(),
+        }))
+        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    } catch (error) {
+      console.error("Error processing payments:", error);
+      return [];
+    }
+  }, [payments]);
+
+  if (!paymentsArray.length) {
+    return (
+      <div className="text-center py-4">
+        <p className="text-slate-400 text-sm">No payments recorded yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between p-2 bg-slate-700/20 hover:bg-slate-700/30 rounded-lg transition-colors duration-200"
+      >
+        <div className="flex items-center gap-2">
+          <History className="w-4 h-4 text-slate-300" />
+          <span className="text-slate-200 font-medium text-sm">
+            Payment History ({paymentsArray.length})
+          </span>
+        </div>
+        {isExpanded ? (
+          <ChevronUp className="w-4 h-4 text-slate-400" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-slate-400" />
+        )}
+      </button>
+
+      {isExpanded && (
+        <div className="space-y-2 max-h-48 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
+          {paymentsArray.map((payment, index) => (
+            <div
+              key={payment.id || index}
+              className="bg-slate-700/30 rounded-lg p-3"
+            >
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-emerald-300 font-semibold text-sm">
+                  ₱{(payment.amount || 0).toLocaleString()}
+                </span>
+                <span className="text-slate-400 text-xs">
+                  {payment.timestamp
+                    ? new Date(payment.timestamp).toLocaleDateString()
+                    : "Unknown"}
+                </span>
+              </div>
+              {payment.proofUrl && (
+                <a
+                  href={payment.proofUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors text-xs"
+                >
+                  <FileImage className="w-3 h-3" />
+                  View Proof
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Proof Upload Component
+const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
+  const [uploading, setUploading] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [preview, setPreview] = useState("");
+  const [error, setError] = useState(""); // ADD this line
+
+  useEffect(() => {
+    if (open) {
+      setPaymentAmount("");
+      setSelectedFile(null);
+      setPreview("");
+      setError(""); // ADD this line
+    }
+  }, [open]);
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        setError("File size must be less than 5MB");
+        return;
+      }
+
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        setError("Please select a valid image file");
+        return;
+      }
+
+      setError(""); // Clear any previous errors
+      setSelectedFile(file);
+      const reader = new FileReader();
+      reader.onload = () => setPreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(""); // Clear previous errors
+
+    const amount = parseFloat(paymentAmount);
+    const maxAmount = parseFloat(loan?.remainingAmount) || 0;
+
+    // Validation with nice error messages
+    if (!selectedFile) {
+      setError("Please select a proof image");
+      return;
+    }
+
+    if (!amount || amount <= 0) {
+      setError("Please enter a valid payment amount");
+      return;
+    }
+
+    if (amount > maxAmount) {
+      setError(
+        `Payment amount cannot exceed remaining amount of ₱${maxAmount.toLocaleString()}`
+      );
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const uploadResult = await cloudinaryService.uploadImage(selectedFile);
+      await onUpload({
+        amount: amount,
+        proofUrl: uploadResult.secure_url,
+        proofPublicId: uploadResult.public_id,
+      });
+      onClose();
+    } catch (error) {
+      console.error("Upload failed:", error);
+      setError(`Failed to upload proof: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-200">
+      <div className="bg-slate-800/95 backdrop-blur-xl border-t border-slate-600/50 sm:border sm:border-slate-600/50 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-4 duration-300">
+        <div className="flex items-center justify-between p-6 border-b border-slate-600/30">
+          <h2 className="text-xl font-bold text-white">
+            Upload Proof of Payment
+          </h2>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 rounded-full bg-slate-700/50 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all duration-200"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {/* ADD ErrorMessage component here */}
+          <ErrorMessage error={error} onClose={() => setError("")} />
+
+          {/* Rest of the form remains the same */}
+          <div>
+            <label className="block text-slate-300 text-sm font-medium mb-2">
+              Payment Amount (Max: ₱
+              {(loan?.remainingAmount || 0).toLocaleString()})
+            </label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
+                ₱
+              </span>
+              <input
+                type="number"
+                value={paymentAmount}
+                onChange={(e) => {
+                  setPaymentAmount(e.target.value);
+                  if (error) setError(""); // Clear error when user types
+                }}
+                className="w-full pl-8 pr-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
+                placeholder="0.00"
+                min="0"
+                max={loan?.remainingAmount || 0}
+                step="0.01"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-300 text-sm font-medium mb-2">
+              Upload Proof
+            </label>
+            <div className="border-2 border-dashed border-slate-600/50 rounded-xl p-6 text-center">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+                id="proof-upload"
+                required
+              />
+              <label htmlFor="proof-upload" className="cursor-pointer">
+                {preview ? (
+                  <img
+                    src={preview}
+                    alt="Preview"
+                    className="w-32 h-32 object-cover rounded-lg mx-auto mb-3"
+                  />
+                ) : (
+                  <>
+                    <Camera className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+                    <p className="text-slate-400 text-sm">
+                      Click to select image
+                    </p>
+                  </>
+                )}
+              </label>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <Button variant="ghost" onClick={onClose} className="flex-1">
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={uploading || !selectedFile || !paymentAmount}
+              className="flex-1"
+            >
+              {uploading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                  Uploading...
+                </>
+              ) : (
+                "Upload Proof"
+              )}
+            </Button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -334,207 +865,278 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
     description: "",
     status: "active",
   });
+  const [error, setError] = useState("");
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false); // ADD this
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false); // ADD this
+  const [originalData, setOriginalData] = useState(null); // ADD this
 
   useEffect(() => {
     if (loan) {
-      setFormData(loan);
+      const loanData = {
+        ...loan,
+        amount: (loan.amount || 0).toString(),
+        personName: loan.personName || "",
+        type: loan.type || "lent",
+        date: loan.date || new Date().toISOString().split("T")[0],
+        description: loan.description || "",
+        status: loan.status || "active",
+      };
+      setFormData(loanData);
+      setOriginalData(loanData); // Store original data
     } else {
-      setFormData({
+      const newLoanData = {
         personName: "",
         amount: "",
         type: "lent",
         date: new Date().toISOString().split("T")[0],
         description: "",
         status: "active",
-      });
+      };
+      setFormData(newLoanData);
+      setOriginalData(newLoanData);
     }
+    setError("");
+    setHasUnsavedChanges(false); // Reset unsaved changes
   }, [loan, open]);
+
+  const checkForChanges = (newData) => {
+    if (!originalData) return false;
+    return JSON.stringify(newData) !== JSON.stringify(originalData);
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    setError("");
+
+    const amount = parseFloat(formData.amount);
+
+    if (!formData.personName?.trim()) {
+      setError("Please enter person's name");
+      return;
+    }
+
+    if (formData.personName.trim().length > 100) {
+      setError("Person's name must be less than 100 characters");
+      return;
+    }
+
+    if (!amount || amount <= 0) {
+      setError("Please enter a valid amount greater than 0");
+      return;
+    }
+
+    if (amount > 999999999) {
+      setError("Amount is too large");
+      return;
+    }
+
     onSave({
       ...formData,
-      amount: parseFloat(formData.amount),
+      amount: amount,
       id: loan?.id || null,
     });
+    setHasUnsavedChanges(false); // Reset after save
+  };
+
+  const updateFormData = (field, value) => {
+    const newData = { ...formData, [field]: value };
+    setFormData(newData);
+    setHasUnsavedChanges(checkForChanges(newData)); // Check for changes
+    if (error) setError("");
+  };
+
+  const handleClose = () => {
+    if (hasUnsavedChanges) {
+      setShowUnsavedWarning(true);
+    } else {
+      onClose();
+    }
   };
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-200">
-      <div className="bg-slate-800/95 backdrop-blur-xl border-t border-slate-600/50 sm:border sm:border-slate-600/50 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-4 duration-300">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-600/30">
-          <h2 className="text-xl font-bold text-white">
-            {loan ? "Edit Loan" : "Add New Loan"}
-          </h2>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 rounded-full bg-slate-700/50 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all duration-200"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Form */}
-        <form
-          onSubmit={handleSubmit}
-          className="p-6 space-y-5 max-h-[60vh] overflow-y-auto"
-        >
-          <div>
-            <label className="block text-slate-300 text-sm font-medium mb-2">
-              Person Name
-            </label>
-            <input
-              type="text"
-              value={formData.personName}
-              onChange={(e) =>
-                setFormData({ ...formData, personName: e.target.value })
-              }
-              className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
-              placeholder="Enter person's name"
-              required
-            />
+    <>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-200">
+        <div className="bg-slate-800/95 backdrop-blur-xl border-t border-slate-600/50 sm:border sm:border-slate-600/50 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center justify-between p-6 border-b border-slate-600/30">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold text-white">
+                {loan ? "Edit Loan" : "Add New Loan"}
+              </h2>
+              {/* ADD unsaved changes indicator */}
+              {hasUnsavedChanges && (
+                <div
+                  className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"
+                  title="Unsaved changes"
+                ></div>
+              )}
+            </div>
+            <button
+              onClick={handleClose} // CHANGE from onClose to handleClose
+              className="w-10 h-10 rounded-full bg-slate-700/50 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all duration-200"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
-          <div>
-            <label className="block text-slate-300 text-sm font-medium mb-2">
-              Amount
-            </label>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
-                ₱
-              </span>
+          <form
+            onSubmit={handleSubmit}
+            className="p-6 space-y-5 max-h-[60vh] overflow-y-auto"
+          >
+            {/* ADD ErrorMessage component here */}
+            <ErrorMessage error={error} onClose={() => setError("")} />
+
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-2">
+                Person Name
+              </label>
               <input
-                type="number"
-                value={formData.amount}
-                onChange={(e) =>
-                  setFormData({ ...formData, amount: e.target.value })
-                }
-                className="w-full pl-8 pr-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
-                placeholder="0.00"
-                min="0"
-                step="0.01"
+                type="text"
+                value={formData.personName}
+                onChange={(e) => updateFormData("personName", e.target.value)}
+                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
+                placeholder="Enter person's name"
+                required
+                minLength="1"
+                maxLength="100"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-2">
+                Amount
+              </label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
+                  ₱
+                </span>
+                <input
+                  type="number"
+                  value={formData.amount}
+                  onChange={(e) => updateFormData("amount", e.target.value)}
+                  className="w-full pl-8 pr-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
+                  placeholder="0.00"
+                  min="0.01"
+                  step="0.01"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Rest of the form remains the same */}
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-2">
+                Type
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                {["lent", "borrowed"].map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => updateFormData("type", type)}
+                    className={`p-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      formData.type === type
+                        ? type === "lent"
+                          ? "bg-emerald-500 text-white"
+                          : "bg-red-500 text-white"
+                        : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
+                    }`}
+                  >
+                    Money I {type === "lent" ? "Lent" : "Borrowed"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-2">
+                Date
+              </label>
+              <input
+                type="date"
+                value={formData.date}
+                onChange={(e) => updateFormData("date", e.target.value)}
+                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
                 required
               />
             </div>
-          </div>
 
-          <div>
-            <label className="block text-slate-300 text-sm font-medium mb-2">
-              Type
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, type: "lent" })}
-                className={`p-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  formData.type === "lent"
-                    ? "bg-emerald-500 text-white"
-                    : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
-                }`}
-              >
-                Money I Lent
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, type: "borrowed" })}
-                className={`p-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  formData.type === "borrowed"
-                    ? "bg-red-500 text-white"
-                    : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
-                }`}
-              >
-                Money I Borrowed
-              </button>
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-2">
+                Description (Optional)
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => updateFormData("description", e.target.value)}
+                rows={3}
+                maxLength="500"
+                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 resize-none transition-all duration-200"
+                placeholder="Add a note about this loan..."
+              />
+              <div className="text-right mt-1">
+                <span className="text-xs text-slate-400">
+                  {formData.description.length}/500
+                </span>
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-slate-300 text-sm font-medium mb-2">
-              Date
-            </label>
-            <input
-              type="date"
-              value={formData.date}
-              onChange={(e) =>
-                setFormData({ ...formData, date: e.target.value })
-              }
-              className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-slate-300 text-sm font-medium mb-2">
-              Description (Optional)
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
-              }
-              rows={3}
-              className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 resize-none transition-all duration-200"
-              placeholder="Add a note about this loan..."
-            />
-          </div>
-
-          <div>
-            <label className="block text-slate-300 text-sm font-medium mb-2">
-              Status
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, status: "active" })}
-                className={`p-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  formData.status === "active"
-                    ? "bg-amber-500 text-white"
-                    : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
-                }`}
-              >
-                Active
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, status: "paid" })}
-                className={`p-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  formData.status === "paid"
-                    ? "bg-emerald-500 text-white"
-                    : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
-                }`}
-              >
-                Paid
-              </button>
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-2">
+                Status
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                {["active", "paid"].map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => updateFormData("status", status)}
+                    className={`p-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      formData.status === status
+                        ? status === "active"
+                          ? "bg-amber-500 text-white"
+                          : "bg-emerald-500 text-white"
+                        : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
+                    }`}
+                  >
+                    {status === "active" ? "Active" : "Paid"}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        </form>
+          </form>
 
-        {/* Footer Buttons */}
-        <div className="flex gap-3 p-6 border-t border-slate-600/30">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 px-4 py-3 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded-xl transition-all duration-200"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-semibold py-3 rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
-          >
-            {loan ? "Update" : "Add"} Loan
-          </button>
+          <div className="flex gap-3 p-6 border-t border-slate-600/30">
+            <Button variant="ghost" onClick={handleClose} className="flex-1">
+              Cancel
+            </Button>
+            <Button onClick={handleSubmit} className="flex-1">
+              {loan ? "Update" : "Add"} Loan
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
+
+      <ConfirmationModal
+        open={showUnsavedWarning}
+        onClose={() => setShowUnsavedWarning(false)}
+        onConfirm={() => {
+          setShowUnsavedWarning(false);
+          setHasUnsavedChanges(false);
+          onClose();
+        }}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Are you sure you want to close without saving?"
+        confirmText="Discard"
+        cancelText="Keep Editing"
+        type="warning"
+      />
+    </>
   );
 };
 
 // Enhanced Loan List Component
-const LoanList = ({ loans, onEdit, onDelete }) => {
+const LoanList = ({ loans, onEdit, onDelete, onUploadProof }) => {
   if (loans.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-4 text-center animate-in slide-in-from-bottom-4 duration-500">
@@ -551,25 +1153,56 @@ const LoanList = ({ loans, onEdit, onDelete }) => {
 
   return (
     <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
-      {loans.map((loan, index) => (
-        <div
-          key={loan.id}
-          className="bg-slate-800/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-5 hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-[1.01] animate-in slide-in-from-bottom-2"
-          style={{ animationDelay: `${index * 50}ms` }}
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
+      {loans.map((loan, index) => {
+        if (!loan) return null;
+
+        const originalAmount = parseFloat(loan.amount) || 0;
+        const remainingAmount =
+          parseFloat(loan.remainingAmount) || originalAmount;
+        const totalPaid = Math.max(0, originalAmount - remainingAmount);
+
+        // Compute payments array directly, not using useMemo
+        let payments = [];
+        if (loan.payments && typeof loan.payments === "object") {
+          try {
+            payments = Object.values(loan.payments)
+              .filter((payment) => payment && typeof payment === "object")
+              .map((payment) => ({
+                ...payment,
+                amount: parseFloat(payment.amount) || 0,
+                timestamp: payment.timestamp || Date.now(),
+              }))
+              .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+          } catch (error) {
+            console.error(
+              "Error processing payments for loan:",
+              loan.id,
+              error
+            );
+            payments = [];
+          }
+        }
+
+        const hasPayments = payments.length > 0;
+
+        return (
+          <Card
+            key={loan.id || index}
+            className="animate-in slide-in-from-bottom-2 p-4"
+            style={{ animationDelay: `${index * 50}ms` }}
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-lg flex-shrink-0">
                   {loan.personName.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold text-white truncate">
+                  <h3 className="text-base font-semibold text-white truncate mb-1">
                     {loan.personName}
                   </h3>
-                  <div className="flex gap-2 mt-1">
+                  <div className="flex gap-2">
                     <span
-                      className={`px-2 py-1 text-xs rounded-full font-medium ${
+                      className={`px-2 py-0.5 text-xs rounded-full font-medium ${
                         loan.type === "lent"
                           ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
                           : "bg-red-500/20 text-red-400 border border-red-500/30"
@@ -578,7 +1211,7 @@ const LoanList = ({ loans, onEdit, onDelete }) => {
                       {loan.type === "lent" ? "Lent" : "Borrowed"}
                     </span>
                     <span
-                      className={`px-2 py-1 text-xs rounded-full font-medium ${
+                      className={`px-2 py-0.5 text-xs rounded-full font-medium ${
                         loan.status === "active"
                           ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
                           : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
@@ -590,45 +1223,132 @@ const LoanList = ({ loans, onEdit, onDelete }) => {
                 </div>
               </div>
 
-              <p className="text-2xl font-bold text-emerald-400 mb-2">
-                ₱{loan.amount.toLocaleString()}
-              </p>
-              <p className="text-slate-400 text-sm mb-1">
+              <div className="flex gap-1 ml-2 flex-shrink-0">
+                {remainingAmount > 0 && loan.status === "active" && (
+                  <button
+                    onClick={() => onUploadProof(loan)}
+                    className="w-8 h-8 rounded-lg bg-slate-700/50 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-all duration-200 flex items-center justify-center"
+                    title="Upload proof"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  onClick={() => onEdit(loan)}
+                  className="w-8 h-8 rounded-lg bg-slate-700/50 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400 transition-all duration-200 flex items-center justify-center"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => onDelete(loan)}
+                  className="w-8 h-8 rounded-lg bg-slate-700/50 hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-all duration-200 flex items-center justify-center"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Compact Amount Info */}
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="text-center">
+                <p className="text-slate-400 text-xs mb-1">Original</p>
+                <p className="text-white font-semibold text-sm">
+                  ₱{loan.amount.toLocaleString()}
+                </p>
+              </div>
+              <div className="text-center">
+                {loan.status === "paid" ? (
+                  <>
+                    <p className="text-slate-400 text-xs mb-1">Status</p>
+                    <p className="text-emerald-300 font-bold text-sm flex items-center justify-center gap-1">
+                      <Check className="w-3 h-3" />
+                      PAID
+                    </p>
+                  </>
+                ) : remainingAmount === loan.amount ? (
+                  <>
+                    <p className="text-slate-400 text-xs mb-1">Status</p>
+                    <p className="text-amber-300 font-bold text-sm">UNPAID</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-slate-400 text-xs mb-1">Remaining</p>
+                    <p className="text-amber-300 font-bold text-base">
+                      ₱{remainingAmount.toLocaleString()}
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Progress Bar - Only show if there are payments */}
+            {totalPaid > 0 && (
+              <div className="mb-3">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-slate-400 text-xs">Progress</span>
+                  <span className="text-slate-400 text-xs">
+                    {((totalPaid / loan.amount) * 100).toFixed(1)}%
+                  </span>
+                </div>
+                <div className="w-full bg-slate-700/50 rounded-full h-1.5">
+                  <div
+                    className="bg-gradient-to-r from-emerald-500 to-emerald-400 h-1.5 rounded-full transition-all duration-300"
+                    style={{ width: `${(totalPaid / loan.amount) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+
+            {/* Compact Date and Description */}
+            <div className="flex justify-between items-center mb-3">
+              <p className="text-slate-400 text-xs">
                 {new Date(loan.date).toLocaleDateString("en-US", {
-                  year: "numeric",
                   month: "short",
                   day: "numeric",
+                  year: "2-digit",
                 })}
               </p>
-              {loan.description && (
-                <p className="text-slate-300 text-sm bg-slate-700/30 rounded-lg px-3 py-2 mt-2">
-                  {loan.description}
+              {totalPaid > 0 && (
+                <p className="text-emerald-400 text-xs font-medium">
+                  ₱{totalPaid.toLocaleString()} paid
                 </p>
               )}
             </div>
 
-            <div className="flex gap-2 ml-4">
-              <button
-                onClick={() => onEdit(loan)}
-                className="w-10 h-10 rounded-xl bg-slate-700/50 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400 transition-all duration-200 flex items-center justify-center"
-              >
-                <Edit3 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => onDelete(loan.id)}
-                className="w-10 h-10 rounded-xl bg-slate-700/50 hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-all duration-200 flex items-center justify-center"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      ))}
+            {loan.description && (
+              <p className="text-slate-200 text-xs bg-slate-700/30 rounded-lg px-2 py-1 mb-3 line-clamp-2">
+                {loan.description}
+              </p>
+            )}
+
+            {/* Collapsible Payment History */}
+            {hasPayments && <PaymentHistory payments={loan.payments} />}
+
+            {/* Latest Proof Link - Only if no payment history shown */}
+            {hasPayments &&
+              !hasPayments &&
+              (() => {
+                const latestWithProof = payments.find((p) => p.proofUrl);
+                return latestWithProof?.proofUrl ? (
+                  <a
+                    href={latestWithProof.proofUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-emerald-400 hover:text-emerald-300 inline-flex items-center gap-1"
+                  >
+                    <FileImage className="w-3 h-3" />
+                    Latest Proof
+                  </a>
+                ) : null;
+              })()}
+          </Card>
+        );
+      })}
     </div>
   );
 };
 
-// Enhanced Notification Component
+// Notification Component
 const Notification = ({ message, type, onClose }) => {
   useEffect(() => {
     const timer = setTimeout(onClose, 4000);
@@ -637,33 +1357,142 @@ const Notification = ({ message, type, onClose }) => {
 
   if (!message) return null;
 
-  const bgColor = type === "error" ? "bg-red-500/10" : "bg-emerald-500/10";
-  const borderColor =
-    type === "error" ? "border-red-500/30" : "border-emerald-500/30";
-  const textColor = type === "error" ? "text-red-400" : "text-emerald-400";
-  const Icon = type === "error" ? AlertTriangle : Check;
+  const config = {
+    error: {
+      bg: "bg-red-500/10",
+      border: "border-red-500/30",
+      text: "text-red-400",
+      iconBg: "bg-red-500/20",
+      Icon: AlertTriangle,
+    },
+    success: {
+      bg: "bg-emerald-500/10",
+      border: "border-emerald-500/30",
+      text: "text-emerald-400",
+      iconBg: "bg-emerald-500/20",
+      Icon: Check,
+    },
+  };
+
+  const { bg, border, text, iconBg, Icon } = config[type] || config.success;
 
   return (
     <div
-      className={`fixed top-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:transform sm:-translate-x-1/2 ${bgColor} ${borderColor} backdrop-blur-xl border px-4 py-4 rounded-2xl shadow-lg z-50 max-w-md mx-auto animate-in slide-in-from-top-4 duration-300`}
+      className={`fixed top-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:transform sm:-translate-x-1/2 ${bg} ${border} backdrop-blur-xl border px-4 py-4 rounded-2xl shadow-lg z-50 max-w-md mx-auto animate-in slide-in-from-top-4 duration-300`}
     >
       <div className="flex items-center gap-3">
         <div
-          className={`w-8 h-8 rounded-lg ${
-            type === "error" ? "bg-red-500/20" : "bg-emerald-500/20"
-          } flex items-center justify-center`}
+          className={`w-8 h-8 rounded-lg ${iconBg} flex items-center justify-center`}
         >
           <Icon className="w-4 h-4" />
         </div>
-        <span className={`flex-1 text-sm font-medium ${textColor}`}>
-          {message}
-        </span>
+        <span className={`flex-1 text-sm font-medium ${text}`}>{message}</span>
         <button
           onClick={onClose}
-          className={`${textColor} hover:opacity-70 transition-opacity`}
+          className={`${text} hover:opacity-70 transition-opacity`}
         >
           <X className="w-4 h-4" />
         </button>
+      </div>
+    </div>
+  );
+};
+
+const ErrorMessage = ({ error, onClose }) => {
+  if (!error) return null;
+
+  return (
+    <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl animate-in slide-in-from-top-2 duration-300">
+      <div className="flex items-start gap-3">
+        <div className="w-5 h-5 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+          <AlertTriangle className="w-3 h-3 text-red-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-red-400 text-sm font-medium">{error}</p>
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="text-red-400/60 hover:text-red-400 transition-colors flex-shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ConfirmationModal = ({
+  open,
+  onClose,
+  onConfirm,
+  title,
+  message,
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  type = "danger", // "danger" or "warning"
+}) => {
+  if (!open) return null;
+
+  const typeStyles = {
+    danger: {
+      icon: Trash2,
+      iconBg: "bg-red-500/20",
+      iconColor: "text-red-400",
+      confirmBtn:
+        "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700",
+    },
+    warning: {
+      icon: LogOut,
+      iconBg: "bg-amber-500/20",
+      iconColor: "text-amber-400",
+      confirmBtn:
+        "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700",
+    },
+  };
+
+  const style = typeStyles[type];
+  const Icon = style.icon;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+      <div className="bg-slate-800/95 backdrop-blur-xl border border-slate-600/50 rounded-3xl w-full max-w-md animate-in slide-in-from-bottom-4 duration-300">
+        <div className="p-6">
+          <div className="flex items-start gap-4 mb-6">
+            <div
+              className={`w-12 h-12 ${style.iconBg} rounded-2xl flex items-center justify-center flex-shrink-0`}
+            >
+              <Icon className={`w-6 h-6 ${style.iconColor}`} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
+              <p className="text-slate-300 text-sm leading-relaxed">
+                {message}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <Button
+              variant="ghost"
+              onClick={onClose}
+              className="flex-1"
+              disabled={false}
+            >
+              {cancelText}
+            </Button>
+            <button
+              onClick={() => {
+                onConfirm();
+                onClose();
+              }}
+              className={`flex-1 font-semibold rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] text-white shadow-lg px-4 py-3 ${style.confirmBtn}`}
+            >
+              {confirmText}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -675,8 +1504,14 @@ const LoanTrackerApp = () => {
   const [loans, setLoans] = useState([]);
   const [currentView, setCurrentView] = useState("dashboard");
   const [showLoanForm, setShowLoanForm] = useState(false);
+  const [showProofUpload, setShowProofUpload] = useState(false);
   const [editingLoan, setEditingLoan] = useState(null);
+  const [selectedLoan, setSelectedLoan] = useState(null);
   const [notification, setNotification] = useState({ message: "", type: "" });
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [loanToDelete, setLoanToDelete] = useState(null);
 
   useEffect(() => {
     if (!user) return;
@@ -717,14 +1552,19 @@ const LoanTrackerApp = () => {
     }
   };
 
+  const initiateDelete = (loan) => {
+    setLoanToDelete(loan);
+    setShowDeleteConfirm(true);
+  };
+
   const handleDeleteLoan = async (loanId) => {
-    if (window.confirm("Are you sure you want to delete this loan?")) {
-      try {
-        await loanService.deleteLoan(user.uid, loanId);
-        showNotification("Loan deleted successfully!");
-      } catch (error) {
-        showNotification("Error deleting loan: " + error.message, "error");
-      }
+    try {
+      await loanService.deleteLoan(user.uid, loanId);
+      showNotification("Loan deleted successfully!");
+      setShowDeleteConfirm(false);
+      setLoanToDelete(null);
+    } catch (error) {
+      showNotification("Error deleting loan: " + error.message, "error");
     }
   };
 
@@ -733,9 +1573,57 @@ const LoanTrackerApp = () => {
     setShowLoanForm(true);
   };
 
+  const handleUploadProof = (loan) => {
+    setSelectedLoan(loan);
+    setShowProofUpload(true);
+  };
+
+  const handleProofUpload = async (paymentData) => {
+    try {
+      const { amount, proofUrl, proofPublicId } = paymentData;
+      const loan = selectedLoan;
+
+      // Add payment record first
+      await loanService.addPayment(user.uid, loan.id, {
+        amount,
+        proofUrl,
+        proofPublicId,
+      });
+
+      // Calculate new remaining amount
+      const newRemainingAmount = Math.max(
+        0,
+        (loan.remainingAmount || loan.amount) - amount
+      );
+      const newStatus = newRemainingAmount === 0 ? "paid" : loan.status;
+
+      // Update only the necessary fields without overwriting payments
+      await loanService.updateLoanAfterPayment(
+        user.uid,
+        loan.id,
+        newRemainingAmount,
+        newStatus
+      );
+
+      showNotification(
+        `Payment of ₱${amount.toLocaleString()} recorded successfully!`
+      );
+      setShowProofUpload(false);
+      setSelectedLoan(null);
+    } catch (error) {
+      console.error("Error uploading proof:", error);
+      showNotification("Error uploading proof: " + error.message, "error");
+    }
+  };
+
+  const initiateLogout = () => {
+    setShowLogoutConfirm(true);
+  };
+
   const handleLogout = async () => {
     try {
       await signOut();
+      showNotification("Signed out successfully!");
     } catch (error) {
       showNotification("Error signing out: " + error.message, "error");
     }
@@ -745,6 +1633,42 @@ const LoanTrackerApp = () => {
     return <LoginForm />;
   }
 
+  const NavigationButton = (
+    { view, icon: Icon, label, isActive } // eslint-disable-line no-unused-vars
+  ) => (
+    <button
+      onClick={() => setCurrentView(view)}
+      className={`relative flex flex-col items-center gap-1 p-3 rounded-xl transition-all duration-300 ease-out transform hover:scale-105 active:scale-95 ${
+        isActive
+          ? "bg-emerald-500/20 text-emerald-400 shadow-lg shadow-emerald-500/10"
+          : "text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
+      }`}
+    >
+      {/* Animated background glow for active state */}
+      {isActive && (
+        <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/10 to-emerald-400/5 rounded-xl animate-pulse"></div>
+      )}
+
+      {/* Icon with bounce animation on hover */}
+      <div className="relative z-10 transition-transform duration-200 hover:scale-110">
+        <Icon
+          className={`w-5 h-5 transition-all duration-300 ${
+            isActive ? "drop-shadow-lg" : ""
+          }`}
+        />
+      </div>
+
+      {/* Label with slide animation */}
+      <span
+        className={`relative z-10 text-xs font-medium transition-all duration-300 ${
+          isActive ? "tracking-wide" : ""
+        }`}
+      >
+        {label}
+      </span>
+    </button>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Mobile Header */}
@@ -753,7 +1677,9 @@ const LoanTrackerApp = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
-                <DollarSign className="w-6 h-6 text-white" />
+                <span className="w-6 h-6 text-white text-2xl font-bold flex items-center justify-center">
+                  ₱
+                </span>
               </div>
               <div>
                 <h1 className="text-lg font-bold text-white">Loan Tracker</h1>
@@ -763,7 +1689,7 @@ const LoanTrackerApp = () => {
               </div>
             </div>
             <button
-              onClick={handleLogout}
+              onClick={initiateLogout} // CHANGE from handleLogout to initiateLogout
               className="w-10 h-10 rounded-xl bg-slate-700/50 hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-all duration-200 flex items-center justify-center"
             >
               <LogOut className="w-5 h-5" />
@@ -779,36 +1705,41 @@ const LoanTrackerApp = () => {
           <LoanList
             loans={loans}
             onEdit={handleEditLoan}
-            onDelete={handleDeleteLoan}
+            onDelete={initiateDelete}
+            onUploadProof={handleUploadProof}
           />
         )}
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-slate-800/90 backdrop-blur-xl border-t border-slate-700/50 z-40">
+      <nav className="fixed bottom-0 left-0 right-0 bg-slate-800/90 backdrop-blur-xl border-t border-slate-700/50 z-40 transition-all duration-300">
+        {/* Add a subtle top glow line */}
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent"></div>
+
         <div className="grid grid-cols-2 gap-1 p-2">
-          <button
-            onClick={() => setCurrentView("dashboard")}
-            className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all duration-200 ${
+          <NavigationButton
+            view="dashboard"
+            icon={Home}
+            label="Dashboard"
+            isActive={currentView === "dashboard"}
+          />
+          <NavigationButton
+            view="loans"
+            icon={List}
+            label="All Loans"
+            isActive={currentView === "loans"}
+          />
+        </div>
+
+        {/* Animated sliding indicator */}
+        <div className="absolute bottom-0 left-0 right-0 h-1 overflow-hidden">
+          <div
+            className={`h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-transform duration-500 ease-out ${
               currentView === "dashboard"
-                ? "bg-emerald-500/20 text-emerald-400"
-                : "text-slate-400 hover:text-slate-300 hover:bg-slate-700/50"
+                ? "transform translate-x-0 w-1/2"
+                : "transform translate-x-full w-1/2"
             }`}
-          >
-            <Home className="w-5 h-5" />
-            <span className="text-xs font-medium">Dashboard</span>
-          </button>
-          <button
-            onClick={() => setCurrentView("loans")}
-            className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all duration-200 ${
-              currentView === "loans"
-                ? "bg-emerald-500/20 text-emerald-400"
-                : "text-slate-400 hover:text-slate-300 hover:bg-slate-700/50"
-            }`}
-          >
-            <List className="w-5 h-5" />
-            <span className="text-xs font-medium">All Loans</span>
-          </button>
+          ></div>
         </div>
       </nav>
 
@@ -818,12 +1749,12 @@ const LoanTrackerApp = () => {
           setEditingLoan(null);
           setShowLoanForm(true);
         }}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-200 transform hover:scale-110 active:scale-95 z-30"
+        className="fixed bottom-23 right-4 w-14 h-14 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-200 transform hover:scale-110 active:scale-95 z-30"
       >
         <Plus className="w-6 h-6 mx-auto" />
       </button>
 
-      {/* Loan Form Modal */}
+      {/* Modals */}
       <LoanForm
         loan={editingLoan}
         open={showLoanForm}
@@ -832,6 +1763,44 @@ const LoanTrackerApp = () => {
           setEditingLoan(null);
         }}
         onSave={handleSaveLoan}
+      />
+
+      <ProofUploadModal
+        loan={selectedLoan}
+        open={showProofUpload}
+        onClose={() => {
+          setShowProofUpload(false);
+          setSelectedLoan(null);
+        }}
+        onUpload={handleProofUpload}
+      />
+
+      {/* ADD Confirmation Modals */}
+      <ConfirmationModal
+        open={showDeleteConfirm}
+        onClose={() => {
+          setShowDeleteConfirm(false);
+          setLoanToDelete(null);
+        }}
+        onConfirm={() => handleDeleteLoan(loanToDelete?.id)}
+        title="Delete Loan"
+        message={`Are you sure you want to delete the loan with ${
+          loanToDelete?.personName || "this person"
+        }? This action cannot be undone and will remove all payment history.`}
+        confirmText="Delete Loan"
+        cancelText="Keep Loan"
+        type="danger"
+      />
+
+      <ConfirmationModal
+        open={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={handleLogout}
+        title="Sign Out"
+        message="Are you sure you want to sign out? You'll need to sign in again to access your loans."
+        confirmText="Sign Out"
+        cancelText="Stay Signed In"
+        type="warning"
       />
 
       {/* Notification */}
@@ -844,38 +1813,76 @@ const LoanTrackerApp = () => {
   );
 };
 
-// Loading Component
-const LoadingScreen = () => {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse">
-          <DollarSign className="w-8 h-8 text-white" />
-        </div>
-        <div className="w-8 h-8 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mx-auto"></div>
+// Loading Screen Component
+const LoadingScreen = () => (
+  <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+    <div className="text-center">
+      <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse">
+        <span className="w-8 h-8 text-white text-4xl font-bold flex items-center justify-center">
+          ₱
+        </span>
       </div>
+      <div className="w-8 h-8 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mx-auto"></div>
     </div>
-  );
-};
+  </div>
+);
 
-// App Content Component (wrapped by AuthProvider)
+// App Content Component
 const AppContent = () => {
   const { loading } = useAuth();
-
-  if (loading) {
-    return <LoadingScreen />;
-  }
-
-  return <LoanTrackerApp />;
+  return loading ? <LoadingScreen /> : <LoanTrackerApp />;
 };
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("App Error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+          <div className="text-center">
+            <div className="w-20 h-20 bg-red-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle className="w-10 h-10 text-red-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-white mb-4">
+              Something went wrong
+            </h1>
+            <p className="text-slate-400 mb-6">
+              Please refresh the page and try again
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl transition-colors"
+            >
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 // Root App Component
-const App = () => {
-  return (
+const App = () => (
+  <ErrorBoundary>
     <AuthProvider>
       <AppContent />
     </AuthProvider>
-  );
-};
+  </ErrorBoundary>
+);
 
 export default App;
