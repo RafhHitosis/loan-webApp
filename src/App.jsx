@@ -31,6 +31,9 @@ import {
   ChevronUp,
   Search,
   Filter,
+  Calendar,
+  Clock,
+  AlertCircle,
 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import {
@@ -1320,6 +1323,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
     amount: "",
     type: "lent",
     date: new Date().toISOString().split("T")[0],
+    dueDate: "",
     description: "",
     status: "active",
   });
@@ -1336,6 +1340,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
         personName: loan.personName || "",
         type: loan.type || "lent",
         date: loan.date || new Date().toISOString().split("T")[0],
+        dueDate: loan.dueDate || "",
         description: loan.description || "",
         status: loan.status || "active",
       };
@@ -1347,6 +1352,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
         amount: "",
         type: "lent",
         date: new Date().toISOString().split("T")[0],
+        dueDate: "",
         description: "",
         status: "active",
       };
@@ -1522,6 +1528,19 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
 
             <div>
               <label className="block text-slate-300 text-sm font-medium mb-2">
+                Due Date (Optional)
+              </label>
+              <input
+                type="date"
+                value={formData.dueDate}
+                onChange={(e) => updateFormData("dueDate", e.target.value)}
+                min={formData.date} // Prevent due date before loan date
+                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-2">
                 Description (Optional)
               </label>
               <textarea
@@ -1593,6 +1612,24 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
   );
 };
 
+const getDueDateStatus = (dueDate) => {
+  if (!dueDate) return null;
+
+  const today = new Date();
+  const due = new Date(dueDate);
+  const diffTime = due.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return { status: "overdue", days: Math.abs(diffDays), color: "red" };
+  } else if (diffDays <= 3) {
+    return { status: "due-soon", days: diffDays, color: "amber" };
+  } else if (diffDays <= 7) {
+    return { status: "upcoming", days: diffDays, color: "blue" };
+  }
+  return { status: "normal", days: diffDays, color: "slate" };
+};
+
 // Enhanced Loan List Component
 const LoanList = ({
   loans,
@@ -1627,6 +1664,11 @@ const LoanList = ({
           parseFloat(loan.remainingAmount) || originalAmount;
         const totalPaid = Math.max(0, originalAmount - remainingAmount);
 
+        const dueDateStatus = getDueDateStatus(loan.dueDate);
+        const isDueSoon =
+          dueDateStatus &&
+          ["overdue", "due-soon"].includes(dueDateStatus.status);
+
         // Compute payments array directly, not using useMemo
         let payments = [];
         if (loan.payments && typeof loan.payments === "object") {
@@ -1654,7 +1696,13 @@ const LoanList = ({
         return (
           <Card
             key={loan.id || index}
-            className="animate-in slide-in-from-bottom-2 p-4"
+            className={`animate-in slide-in-from-bottom-2 p-4 relative ${
+              isDueSoon
+                ? dueDateStatus?.status === "overdue"
+                  ? "ring-2 ring-red-400/50 shadow-lg shadow-red-500/10 animate-pulse border-red-400/30"
+                  : "ring-2 ring-amber-400/50 shadow-lg shadow-amber-500/10 animate-pulse border-amber-400/30"
+                : ""
+            }`}
             style={{ animationDelay: `${index * 50}ms` }}
           >
             <div className="flex items-start justify-between mb-3">
@@ -1666,7 +1714,7 @@ const LoanList = ({
                   <h3 className="text-base font-semibold text-white truncate mb-1">
                     {loan.personName}
                   </h3>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <span
                       className={`px-2 py-0.5 text-xs rounded-full font-medium ${
                         loan.type === "lent"
@@ -1685,6 +1733,28 @@ const LoanList = ({
                     >
                       {loan.status === "active" ? "Active" : "Paid"}
                     </span>
+                    {/* ADD due date badge here with existing badges */}
+                    {dueDateStatus && (
+                      <span
+                        className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+                          dueDateStatus.status === "overdue"
+                            ? "bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse"
+                            : dueDateStatus.status === "due-soon"
+                            ? "bg-amber-500/30 text-amber-300 border border-amber-500/40 animate-pulse"
+                            : dueDateStatus.status === "upcoming"
+                            ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                            : "bg-slate-500/20 text-slate-400 border border-slate-500/30"
+                        }`}
+                      >
+                        {dueDateStatus.status === "overdue"
+                          ? `${dueDateStatus.days}d overdue`
+                          : dueDateStatus.status === "due-soon"
+                          ? dueDateStatus.days === 0
+                            ? "Due today"
+                            : `Due in ${dueDateStatus.days}d`
+                          : `${dueDateStatus.days}d left`}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1743,13 +1813,34 @@ const LoanList = ({
 
             {/* Compact Date and Description */}
             <div className="flex justify-between items-center mb-3">
-              <p className="text-slate-400 text-xs">
-                {new Date(loan.date).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "2-digit",
-                })}
-              </p>
+              <div className="flex flex-col">
+                <p className="text-slate-400 text-xs">
+                  Created:{" "}
+                  {new Date(loan.date).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "2-digit",
+                  })}
+                </p>
+                {loan.dueDate && (
+                  <p
+                    className={`text-xs mt-0.5 ${
+                      dueDateStatus?.status === "overdue"
+                        ? "text-red-400 font-medium"
+                        : dueDateStatus?.status === "due-soon"
+                        ? "text-amber-400 font-medium"
+                        : "text-slate-400"
+                    }`}
+                  >
+                    Due:{" "}
+                    {new Date(loan.dueDate).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "2-digit",
+                    })}
+                  </p>
+                )}
+              </div>
               {totalPaid > 0 && (
                 <p className="text-emerald-400 text-xs font-medium">
                   ₱{totalPaid.toLocaleString()} paid
@@ -2023,9 +2114,31 @@ const LoanTrackerApp = () => {
       filtered = filtered.filter((loan) => loan.type === filters.type);
     }
 
-    // Apply status filter
+    // Apply status filter (including due date filters)
     if (filters.status !== "all") {
-      filtered = filtered.filter((loan) => loan.status === filters.status);
+      if (filters.status === "overdue") {
+        filtered = filtered.filter((loan) => {
+          if (loan.status !== "active" || !loan.dueDate) return false;
+          const now = new Date();
+          const dueDate = new Date(loan.dueDate);
+          const diffDays = Math.ceil(
+            (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          return diffDays <= 0;
+        });
+      } else if (filters.status === "due-soon") {
+        filtered = filtered.filter((loan) => {
+          if (loan.status !== "active" || !loan.dueDate) return false;
+          const now = new Date();
+          const dueDate = new Date(loan.dueDate);
+          const diffDays = Math.ceil(
+            (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          return diffDays > 0 && diffDays <= 3;
+        });
+      } else {
+        filtered = filtered.filter((loan) => loan.status === filters.status);
+      }
     }
 
     return filtered;
@@ -2337,8 +2450,9 @@ const LoanTrackerApp = () => {
               setFilters={setFilters}
               loans={loans}
             />
+            <DueDateWarning loans={loans} />
             <LoanList
-              loans={filteredLoans} // Use filteredLoans instead of loans
+              loans={filteredLoans}
               onEdit={handleEditLoan}
               onDelete={initiateDelete}
               onUploadProof={handleUploadProof}
@@ -2472,16 +2586,43 @@ const FilterSearchBar = ({
 
   // Calculate filter counts
   const filterCounts = useMemo(() => {
+    if (!loans)
+      return {
+        all: 0,
+        lent: 0,
+        borrowed: 0,
+        active: 0,
+        paid: 0,
+        overdue: 0,
+        dueSoon: 0,
+      };
+
+    const now = new Date();
+    let overdue = 0;
+    let dueSoon = 0;
+
+    loans.forEach((loan) => {
+      if (loan.status !== "active" || !loan.dueDate) return;
+
+      const dueDate = new Date(loan.dueDate);
+      const diffTime = dueDate.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays <= 0) {
+        overdue++;
+      } else if (diffDays <= 3) {
+        dueSoon++;
+      }
+    });
+
     return {
-      all: loans ? loans.length : 0,
-      lent: loans ? loans.filter((loan) => loan.type === "lent").length : 0,
-      borrowed: loans
-        ? loans.filter((loan) => loan.type === "borrowed").length
-        : 0,
-      active: loans
-        ? loans.filter((loan) => loan.status === "active").length
-        : 0,
-      paid: loans ? loans.filter((loan) => loan.status === "paid").length : 0,
+      all: loans.length,
+      lent: loans.filter((loan) => loan.type === "lent").length,
+      borrowed: loans.filter((loan) => loan.type === "borrowed").length,
+      active: loans.filter((loan) => loan.status === "active").length,
+      paid: loans.filter((loan) => loan.status === "paid").length,
+      overdue,
+      dueSoon,
     };
   }, [loans]);
 
@@ -2576,32 +2717,60 @@ const FilterSearchBar = ({
             <label className="block text-slate-300 text-sm font-medium mb-2">
               Loan Type
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { key: "all", label: "All", count: filterCounts.all },
-                { key: "lent", label: "Lent", count: filterCounts.lent },
+                { key: "active", label: "Active", count: filterCounts.active },
+                { key: "paid", label: "Paid", count: filterCounts.paid },
                 {
-                  key: "borrowed",
-                  label: "Borrowed",
-                  count: filterCounts.borrowed,
+                  key: "overdue",
+                  label: "Overdue",
+                  count: filterCounts.overdue,
+                  color: "red",
                 },
-              ].map(({ key, label, count }) => (
-                <button
-                  key={key}
-                  onClick={() => setFilters((prev) => ({ ...prev, type: key }))}
-                  className={`p-2 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    filters.type === key
-                      ? key === "all"
-                        ? "bg-slate-600 text-white"
-                        : key === "lent"
-                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                        : "bg-red-500/20 text-red-400 border border-red-500/30"
-                      : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
-                  }`}
-                >
-                  {label} ({count})
-                </button>
-              ))}
+                {
+                  key: "due-soon",
+                  label: "Due Soon",
+                  count: filterCounts.dueSoon,
+                  color: "amber",
+                },
+              ]
+                .filter(
+                  ({ key, count }) =>
+                    count > 0 || ["all", "active", "paid"].includes(key)
+                ) // Only show due date filters if they have items
+                .map(({ key, label, count, color }) => (
+                  <button
+                    key={key}
+                    onClick={() =>
+                      setFilters((prev) => ({ ...prev, status: key }))
+                    }
+                    className={`p-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      filters.status === key
+                        ? key === "all"
+                          ? "bg-slate-600 text-white"
+                          : key === "active"
+                          ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                          : key === "paid"
+                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                          : key === "overdue"
+                          ? "bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse"
+                          : key === "due-soon"
+                          ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                          : "bg-slate-600 text-white"
+                        : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
+                    } ${
+                      color === "red" && count > 0 && key !== filters.status
+                        ? "ring-1 ring-red-500/30"
+                        : ""
+                    }`}
+                  >
+                    {label} ({count})
+                    {key === "overdue" && count > 0 && (
+                      <span className="ml-1">⚠️</span>
+                    )}
+                  </button>
+                ))}
             </div>
           </div>
 
@@ -2646,6 +2815,174 @@ const FilterSearchBar = ({
               Clear All Filters
             </button>
           )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const DueDateWarning = ({ loans }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const dueDateAnalysis = useMemo(() => {
+    if (!loans || loans.length === 0)
+      return { urgent: [], warning: [], count: 0 };
+
+    const now = new Date();
+    const urgent = []; // Overdue and due today
+    const warning = []; // Due in 1-3 days
+
+    loans.forEach((loan) => {
+      if (loan.status !== "active" || !loan.dueDate) return;
+
+      const dueDate = new Date(loan.dueDate);
+      const diffTime = dueDate.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays <= 0) {
+        urgent.push({ ...loan, daysOverdue: Math.abs(diffDays) });
+      } else if (diffDays <= 3) {
+        warning.push({ ...loan, daysLeft: diffDays });
+      }
+    });
+
+    return {
+      urgent: urgent.sort((a, b) => b.daysOverdue - a.daysOverdue),
+      warning: warning.sort((a, b) => a.daysLeft - b.daysLeft),
+      count: urgent.length + warning.length,
+    };
+  }, [loans]);
+
+  if (dueDateAnalysis.count === 0) return null;
+
+  return (
+    <div className="mb-4">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className={`w-full p-3 rounded-xl border transition-all duration-200 ${
+          dueDateAnalysis.urgent.length > 0
+            ? "bg-red-500/10 border-red-500/30 hover:bg-red-500/15 animate-pulse"
+            : "bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/15"
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div
+              className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                dueDateAnalysis.urgent.length > 0
+                  ? "bg-red-500/20 text-red-400"
+                  : "bg-amber-500/20 text-amber-400"
+              }`}
+            >
+              <AlertCircle className="w-4 h-4" />
+            </div>
+            <div className="text-left">
+              <p
+                className={`font-semibold text-sm ${
+                  dueDateAnalysis.urgent.length > 0
+                    ? "text-red-400"
+                    : "text-amber-400"
+                }`}
+              >
+                {dueDateAnalysis.urgent.length > 0 ? "Urgent!" : "Due Soon"}
+              </p>
+              <p className="text-slate-300 text-xs">
+                {dueDateAnalysis.count} loan
+                {dueDateAnalysis.count !== 1 ? "s" : ""} need attention
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {dueDateAnalysis.urgent.length > 0 && (
+              <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-full font-medium border border-red-500/30">
+                {dueDateAnalysis.urgent.length} overdue
+              </span>
+            )}
+            {dueDateAnalysis.warning.length > 0 && (
+              <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs rounded-full font-medium border border-amber-500/30">
+                {dueDateAnalysis.warning.length} soon
+              </span>
+            )}
+            {isExpanded ? (
+              <ChevronUp className="w-4 h-4 text-slate-400" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-slate-400" />
+            )}
+          </div>
+        </div>
+      </button>
+
+      {isExpanded && (
+        <div className="mt-3 space-y-2 animate-in slide-in-from-top-2 duration-200">
+          {dueDateAnalysis.urgent.map((loan, index) => (
+            <div
+              key={loan.id || index}
+              className="p-3 bg-red-500/5 border border-red-500/20 rounded-lg"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <div className="w-6 h-6 bg-red-500/20 rounded-md flex items-center justify-center flex-shrink-0">
+                    <span className="text-red-400 font-bold text-xs">
+                      {loan.personName.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-medium text-sm truncate">
+                      {loan.personName}
+                    </p>
+                    <p className="text-red-400 text-xs">
+                      {loan.daysOverdue === 0
+                        ? "Due today"
+                        : `${loan.daysOverdue} day${
+                            loan.daysOverdue !== 1 ? "s" : ""
+                          } overdue`}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-white font-semibold text-sm">
+                    ₱{(loan.remainingAmount || loan.amount).toLocaleString()}
+                  </p>
+                  <span className="text-red-400 text-xs px-2 py-0.5 bg-red-500/20 rounded-full">
+                    {loan.type}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {dueDateAnalysis.warning.map((loan, index) => (
+            <div
+              key={loan.id || index}
+              className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <div className="w-6 h-6 bg-amber-500/20 rounded-md flex items-center justify-center flex-shrink-0">
+                    <span className="text-amber-400 font-bold text-xs">
+                      {loan.personName.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-medium text-sm truncate">
+                      {loan.personName}
+                    </p>
+                    <p className="text-amber-400 text-xs">
+                      Due in {loan.daysLeft} day{loan.daysLeft !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-white font-semibold text-sm">
+                    ₱{(loan.remainingAmount || loan.amount).toLocaleString()}
+                  </p>
+                  <span className="text-amber-400 text-xs px-2 py-0.5 bg-amber-500/20 rounded-full">
+                    {loan.type}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
