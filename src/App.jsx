@@ -29,6 +29,8 @@ import {
   Camera,
   ChevronDown,
   ChevronUp,
+  Search,
+  Filter,
 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import {
@@ -185,11 +187,22 @@ const loanService = {
 
     try {
       const paymentRef = ref(database, `loans/${userId}/${loanId}/payments`);
+
+      // ADD validation to check if loan exists first
+      const loanRef = ref(database, `loans/${userId}/${loanId}`);
+      const loanSnapshot = await get(loanRef);
+
+      if (!loanSnapshot.exists()) {
+        throw new Error("Loan not found");
+      }
+
       const paymentKey = await push(paymentRef, {
         ...paymentData,
         amount: parseFloat(paymentData.amount),
-        timestamp: Date.now(),
+        timestamp: paymentData.timestamp || Date.now(), // Ensure timestamp is set
       });
+
+      console.log("Payment saved to Firebase with key:", paymentKey.key); // ADD this line
       return paymentKey.key;
     } catch (error) {
       console.error("Error adding payment:", error);
@@ -204,13 +217,35 @@ const loanService = {
     newRemainingAmount,
     newStatus
   ) => {
-    const updates = {
-      [`loans/${userId}/${loanId}/remainingAmount`]: newRemainingAmount,
-      [`loans/${userId}/${loanId}/status`]: newStatus,
-      [`loans/${userId}/${loanId}/updatedAt`]: Date.now(),
-    };
+    if (!userId || !loanId) {
+      throw new Error("User ID and Loan ID are required");
+    }
 
-    return await update(ref(database), updates);
+    try {
+      // ADD validation to check if loan exists first
+      const loanRef = ref(database, `loans/${userId}/${loanId}`);
+      const loanSnapshot = await get(loanRef);
+
+      if (!loanSnapshot.exists()) {
+        throw new Error("Loan not found");
+      }
+
+      const updates = {
+        [`loans/${userId}/${loanId}/remainingAmount`]:
+          parseFloat(newRemainingAmount), // Ensure it's a number
+        [`loans/${userId}/${loanId}/status`]: newStatus,
+        [`loans/${userId}/${loanId}/updatedAt`]: Date.now(),
+      };
+
+      console.log("Updating loan with:", updates); // ADD this line
+      const result = await update(ref(database), updates);
+      console.log("Update result:", result); // ADD this line
+
+      return result;
+    } catch (error) {
+      console.error("Error updating loan after payment:", error);
+      throw new Error(`Failed to update loan: ${error.message}`);
+    }
   },
 
   deleteLoan: async (userId, loanId) => {
@@ -581,10 +616,11 @@ const Dashboard = ({ loans }) => {
 };
 
 // Payment History Component
-const PaymentHistory = ({ payments = {} }) => {
+const PaymentHistory = ({ payments = {}, loan }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
 
-  // Enhanced error handling for payments
   const paymentsArray = useMemo(() => {
     if (!payments || typeof payments !== "object") {
       return [];
@@ -605,6 +641,11 @@ const PaymentHistory = ({ payments = {} }) => {
     }
   }, [payments]);
 
+  const handleViewReceipt = (payment) => {
+    setSelectedReceipt({ payment, loan });
+    setShowReceiptModal(true);
+  };
+
   if (!paymentsArray.length) {
     return (
       <div className="text-center py-4">
@@ -614,57 +655,89 @@ const PaymentHistory = ({ payments = {} }) => {
   }
 
   return (
-    <div className="space-y-2">
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-2 bg-slate-700/20 hover:bg-slate-700/30 rounded-lg transition-colors duration-200"
-      >
-        <div className="flex items-center gap-2">
-          <History className="w-4 h-4 text-slate-300" />
-          <span className="text-slate-200 font-medium text-sm">
-            Payment History ({paymentsArray.length})
-          </span>
-        </div>
-        {isExpanded ? (
-          <ChevronUp className="w-4 h-4 text-slate-400" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-slate-400" />
-        )}
-      </button>
+    <>
+      <div className="space-y-2">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="w-full flex items-center justify-between p-2 bg-slate-700/20 hover:bg-slate-700/30 rounded-lg transition-colors duration-200"
+        >
+          <div className="flex items-center gap-2">
+            <History className="w-4 h-4 text-slate-300" />
+            <span className="text-slate-200 font-medium text-sm">
+              Payment History ({paymentsArray.length})
+            </span>
+          </div>
+          {isExpanded ? (
+            <ChevronUp className="w-4 h-4 text-slate-400" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-400" />
+          )}
+        </button>
 
-      {isExpanded && (
-        <div className="space-y-2 max-h-48 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
-          {paymentsArray.map((payment, index) => (
-            <div
-              key={payment.id || index}
-              className="bg-slate-700/30 rounded-lg p-3"
-            >
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-emerald-300 font-semibold text-sm">
-                  ₱{(payment.amount || 0).toLocaleString()}
-                </span>
-                <span className="text-slate-400 text-xs">
-                  {payment.timestamp
-                    ? new Date(payment.timestamp).toLocaleDateString()
-                    : "Unknown"}
-                </span>
+        {isExpanded && (
+          <div className="space-y-2 max-h-48 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
+            {paymentsArray.map((payment, index) => (
+              <div
+                key={payment.id || index}
+                className="bg-slate-700/30 rounded-lg p-3"
+              >
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-emerald-300 font-semibold text-sm">
+                    ₱{(payment.amount || 0).toLocaleString()}
+                  </span>
+                  <span className="text-slate-400 text-xs">
+                    {payment.timestamp
+                      ? new Date(payment.timestamp).toLocaleDateString()
+                      : "Unknown"}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {payment.type === "manual" ? (
+                    <>
+                      <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full border border-blue-500/30">
+                        Manual Receipt
+                      </span>
+                      <button
+                        onClick={() =>
+                          handleViewReceipt(payment, selectedReceipt?.loan)
+                        }
+                        className="text-blue-400 hover:text-blue-300 transition-colors text-xs underline"
+                      >
+                        View Receipt
+                      </button>
+                    </>
+                  ) : (
+                    payment.proofUrl && (
+                      <a
+                        href={payment.proofUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors text-xs"
+                      >
+                        <FileImage className="w-3 h-3" />
+                        View Proof
+                      </a>
+                    )
+                  )}
+                </div>
               </div>
-              {payment.proofUrl && (
-                <a
-                  href={payment.proofUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors text-xs"
-                >
-                  <FileImage className="w-3 h-3" />
-                  View Proof
-                </a>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Receipt Modal */}
+      <ReceiptViewModal
+        payment={selectedReceipt?.payment}
+        loan={selectedReceipt?.loan}
+        open={showReceiptModal}
+        onClose={() => {
+          setShowReceiptModal(false);
+          setSelectedReceipt(null);
+        }}
+      />
+    </>
   );
 };
 
@@ -736,12 +809,15 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
     setUploading(true);
     try {
       const uploadResult = await cloudinaryService.uploadImage(selectedFile);
+
+      // Call onUpload and wait for it to complete
       await onUpload({
         amount: amount,
         proofUrl: uploadResult.secure_url,
         proofPublicId: uploadResult.public_id,
       });
-      onClose();
+
+      // Don't call onClose here - let the parent component handle it
     } catch (error) {
       console.error("Upload failed:", error);
       setError(`Failed to upload proof: ${error.message}`);
@@ -767,7 +843,7 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form className="p-6 space-y-5">
           {/* ADD ErrorMessage component here */}
           <ErrorMessage error={error} onClose={() => setError("")} />
 
@@ -835,7 +911,7 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
               Cancel
             </Button>
             <Button
-              type="submit"
+              onClick={handleSubmit} // CHANGE from type="submit" to onClick
               disabled={uploading || !selectedFile || !paymentAmount}
               className="flex-1"
             >
@@ -850,6 +926,392 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
             </Button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+};
+
+const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
+  const [formData, setFormData] = useState({
+    amount: "",
+    date: new Date().toISOString().split("T")[0],
+    time: new Date().toTimeString().slice(0, 5),
+    location: "",
+    witnessName: "",
+    witnessContact: "",
+    description: "",
+    paymentMethod: "cash",
+  });
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setFormData({
+        amount: "",
+        date: new Date().toISOString().split("T")[0],
+        time: new Date().toTimeString().slice(0, 5),
+        location: "",
+        witnessName: "",
+        witnessContact: "",
+        description: "",
+        paymentMethod: "cash",
+      });
+      setError("");
+    }
+  }, [open]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    const amount = parseFloat(formData.amount);
+    const maxAmount = parseFloat(loan?.remainingAmount) || 0;
+
+    // Validation
+    if (!amount || amount <= 0) {
+      setError("Please enter a valid payment amount");
+      return;
+    }
+
+    if (amount > maxAmount) {
+      setError(
+        `Payment amount cannot exceed remaining amount of ₱${maxAmount.toLocaleString()}`
+      );
+      return;
+    }
+
+    if (!formData.location.trim()) {
+      setError("Please enter the location where payment was made");
+      return;
+    }
+
+    if (!formData.witnessName.trim()) {
+      setError("Please enter witness name for verification");
+      return;
+    }
+
+    try {
+      // Call onSave and wait for it to complete
+      await onSave({
+        ...formData,
+        amount: amount,
+        type: "manual",
+        receiptId: `MR-${Date.now()}`,
+        timestamp: new Date(`${formData.date}T${formData.time}`).getTime(),
+      });
+
+      // Don't call onClose here - let the parent component handle it
+    } catch (error) {
+      console.error("Save failed:", error);
+      setError(`Failed to save receipt: ${error.message}`);
+    }
+  };
+
+  const updateFormData = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (error) setError("");
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-200">
+      <div className="bg-slate-800/95 backdrop-blur-xl border-t border-slate-600/50 sm:border sm:border-slate-600/50 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-4 duration-300">
+        <div className="flex items-center justify-between p-6 border-b border-slate-600/30">
+          <h2 className="text-xl font-bold text-white">Manual Receipt</h2>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 rounded-full bg-slate-700/50 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all duration-200"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+          <ErrorMessage error={error} onClose={() => setError("")} />
+
+          {/* Amount and Date Row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-2">
+                Amount
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm">
+                  ₱
+                </span>
+                <input
+                  type="number"
+                  value={formData.amount}
+                  onChange={(e) => updateFormData("amount", e.target.value)}
+                  className="w-full pl-7 pr-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+                  placeholder="0.00"
+                  min="0.01"
+                  step="0.01"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-2">
+                Date
+              </label>
+              <input
+                type="date"
+                value={formData.date}
+                onChange={(e) => updateFormData("date", e.target.value)}
+                className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Time and Payment Method */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-2">
+                Time
+              </label>
+              <input
+                type="time"
+                value={formData.time}
+                onChange={(e) => updateFormData("time", e.target.value)}
+                className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-2">
+                Method
+              </label>
+              <select
+                value={formData.paymentMethod}
+                onChange={(e) =>
+                  updateFormData("paymentMethod", e.target.value)
+                }
+                className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+              >
+                <option value="cash">Cash</option>
+                <option value="check">Check</option>
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Location */}
+          <div>
+            <label className="block text-slate-300 text-sm font-medium mb-2">
+              Location
+            </label>
+            <input
+              type="text"
+              value={formData.location}
+              onChange={(e) => updateFormData("location", e.target.value)}
+              className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+              placeholder="Where was the payment made?"
+              required
+            />
+          </div>
+
+          {/* Witness Information */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-2">
+                Witness Name
+              </label>
+              <input
+                type="text"
+                value={formData.witnessName}
+                onChange={(e) => updateFormData("witnessName", e.target.value)}
+                className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+                placeholder="Full name"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-2">
+                Witness Contact
+              </label>
+              <input
+                type="text"
+                value={formData.witnessContact}
+                onChange={(e) =>
+                  updateFormData("witnessContact", e.target.value)
+                }
+                className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+                placeholder="Phone/Email"
+              />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-slate-300 text-sm font-medium mb-2">
+              Notes (Optional)
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => updateFormData("description", e.target.value)}
+              rows={3}
+              maxLength="200"
+              className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 resize-none text-sm"
+              placeholder="Additional details about the payment..."
+            />
+            <div className="text-right mt-1">
+              <span className="text-xs text-slate-400">
+                {formData.description.length}/200
+              </span>
+            </div>
+          </div>
+        </form>
+
+        <div className="flex gap-3 p-6 border-t border-slate-600/30">
+          <Button variant="ghost" onClick={onClose} className="flex-1">
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} className="flex-1">
+            {" "}
+            {/* CHANGE from form submit to onClick */}
+            Save Receipt
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Receipt View Modal Component
+// Receipt View Modal Component - REPLACE the existing ReceiptViewModal component
+const ReceiptViewModal = ({ payment, loan, open, onClose }) => {
+  if (!open || !payment) return null;
+
+  const formatDateTime = (timestamp) => {
+    const date = new Date(timestamp);
+    return {
+      date: date.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+      time: date.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    };
+  };
+
+  const { date, time } = formatDateTime(payment.timestamp);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] animate-in fade-in duration-200 pt-5 pb-5 px-4">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl animate-in slide-in-from-bottom-4 duration-300 flex flex-col max-h-full mx-auto overflow-hidden">
+        {/* Receipt Header */}
+        <div className="bg-slate-800 text-white p-4 text-center rounded-t-2xl flex-shrink-0">
+          <h2 className="text-lg font-bold mb-1">Payment Receipt</h2>
+          <p className="text-slate-300 text-sm">Personal Transaction</p>
+          <div className="mt-2 text-xs text-slate-400 font-mono">
+            #{payment.receiptId}
+          </div>
+        </div>
+
+        {/* Receipt Body - Scrollable */}
+        <div className="p-4 bg-white text-slate-800 space-y-3 overflow-y-auto flex-1">
+          {/* Amount */}
+          <div className="text-center border-b border-slate-200 pb-3">
+            <p className="text-slate-600 text-sm mb-1">Amount Paid</p>
+            <p className="text-2xl font-bold text-slate-800">
+              ₱{payment.amount.toLocaleString()}
+            </p>
+          </div>
+
+          {/* Transaction Details */}
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-600">Date:</span>
+              <span className="font-medium text-right">{date}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-600">Time:</span>
+              <span className="font-medium">{time}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-600">Method:</span>
+              <span className="font-medium capitalize">
+                {payment.paymentMethod?.replace("_", " ") || "Cash"}
+              </span>
+            </div>
+            {payment.location && (
+              <div className="flex justify-between items-start">
+                <span className="text-slate-600 flex-shrink-0">Location:</span>
+                <span className="font-medium text-right ml-2 break-words">
+                  {payment.location}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Parties */}
+          {loan && (
+            <div className="border-t border-slate-200 pt-3 space-y-2 text-sm">
+              <div className="flex justify-between items-start">
+                <span className="text-slate-600 flex-shrink-0">
+                  {loan.type === "lent" ? "Borrower:" : "Lender:"}
+                </span>
+                <span className="font-medium text-right ml-2 break-words">
+                  {loan.personName}
+                </span>
+              </div>
+              {payment.witnessName && (
+                <div className="flex justify-between items-start">
+                  <span className="text-slate-600 flex-shrink-0">Witness:</span>
+                  <span className="font-medium text-right ml-2 break-words">
+                    {payment.witnessName}
+                  </span>
+                </div>
+              )}
+              {payment.witnessContact && (
+                <div className="flex justify-between items-start">
+                  <span className="text-slate-600 flex-shrink-0">Contact:</span>
+                  <span className="font-medium text-xs text-right ml-2 break-all">
+                    {payment.witnessContact}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Description */}
+          {payment.description && (
+            <div className="border-t border-slate-200 pt-3">
+              <p className="text-slate-600 text-sm mb-2">Notes:</p>
+              <p className="text-sm bg-slate-50 rounded-lg p-3 break-words">
+                {payment.description}
+              </p>
+            </div>
+          )}
+
+          {/* Footer Note */}
+          <div className="border-t border-slate-200 pt-3 text-center">
+            <p className="text-xs text-slate-500">
+              Personal Receipt - Keep for your records
+            </p>
+          </div>
+        </div>
+
+        {/* Close Button - Fixed at bottom */}
+        <div className="p-4 bg-slate-50 border-t rounded-b-2xl flex-shrink-0">
+          <button
+            onClick={onClose}
+            className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-colors font-medium active:scale-95 transform"
+          >
+            Close Receipt
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1136,12 +1598,20 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
 };
 
 // Enhanced Loan List Component
-const LoanList = ({ loans, onEdit, onDelete, onUploadProof }) => {
+const LoanList = ({
+  loans,
+  onEdit,
+  onDelete,
+  onUploadProof,
+  onAddManualReceipt,
+}) => {
   if (loans.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-4 text-center animate-in slide-in-from-bottom-4 duration-500">
         <div className="w-20 h-20 bg-slate-700/50 rounded-3xl flex items-center justify-center mx-auto mb-6">
-          <DollarSign className="w-10 h-10 text-slate-400" />
+          <span className="w-10 h-10 text-slate-400 text-5xl font-bold flex items-center justify-center">
+            ₱
+          </span>
         </div>
         <h3 className="text-xl font-semibold text-white mb-2">No loans yet</h3>
         <p className="text-slate-400 mb-6 max-w-sm">
@@ -1225,13 +1695,22 @@ const LoanList = ({ loans, onEdit, onDelete, onUploadProof }) => {
 
               <div className="flex gap-1 ml-2 flex-shrink-0">
                 {remainingAmount > 0 && loan.status === "active" && (
-                  <button
-                    onClick={() => onUploadProof(loan)}
-                    className="w-8 h-8 rounded-lg bg-slate-700/50 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-all duration-200 flex items-center justify-center"
-                    title="Upload proof"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                  </button>
+                  <>
+                    <button
+                      onClick={() => onUploadProof(loan)}
+                      className="w-8 h-8 rounded-lg bg-slate-700/50 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-all duration-200 flex items-center justify-center"
+                      title="Upload proof"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => onAddManualReceipt(loan)} // NEW HANDLER
+                      className="w-8 h-8 rounded-lg bg-slate-700/50 hover:bg-green-500/20 text-slate-400 hover:text-green-400 transition-all duration-200 flex items-center justify-center"
+                      title="Manual receipt"
+                    >
+                      <FileImage className="w-3.5 h-3.5" />
+                    </button>
+                  </>
                 )}
                 <button
                   onClick={() => onEdit(loan)}
@@ -1322,7 +1801,9 @@ const LoanList = ({ loans, onEdit, onDelete, onUploadProof }) => {
             )}
 
             {/* Collapsible Payment History */}
-            {hasPayments && <PaymentHistory payments={loan.payments} />}
+            {hasPayments && (
+              <PaymentHistory payments={loan.payments} loan={loan} />
+            )}
 
             {/* Latest Proof Link - Only if no payment history shown */}
             {hasPayments &&
@@ -1351,9 +1832,15 @@ const LoanList = ({ loans, onEdit, onDelete, onUploadProof }) => {
 // Notification Component
 const Notification = ({ message, type, onClose }) => {
   useEffect(() => {
-    const timer = setTimeout(onClose, 4000);
+    if (!message) return; // ADD this check
+
+    console.log("Notification mounted:", message, type); // ADD this line
+    const timer = setTimeout(() => {
+      console.log("Auto-closing notification"); // ADD this line
+      onClose();
+    }, 4000);
     return () => clearTimeout(timer);
-  }, [onClose]);
+  }, [message, type, onClose]);
 
   if (!message) return null;
 
@@ -1513,27 +2000,141 @@ const LoanTrackerApp = () => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loanToDelete, setLoanToDelete] = useState(null);
 
+  const [showManualReceipt, setShowManualReceipt] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filters, setFilters] = useState({ type: "all", status: "all" });
+
+  const filteredLoans = useMemo(() => {
+    let filtered = loans;
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      filtered = filtered.filter((loan) =>
+        loan.personName?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Apply type filter
+    if (filters.type !== "all") {
+      filtered = filtered.filter((loan) => loan.type === filters.type);
+    }
+
+    // Apply status filter
+    if (filters.status !== "all") {
+      filtered = filtered.filter((loan) => loan.status === filters.status);
+    }
+
+    return filtered;
+  }, [loans, searchQuery, filters]);
+
   useEffect(() => {
     if (!user) return;
 
+    console.log("Setting up loan subscription for user:", user.uid); // ADD this line
+
     const unsubscribe = loanService.subscribeToLoans(user.uid, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const loansArray = Object.keys(data).map((key) => ({
-          id: key,
-          ...data[key],
-        }));
-        setLoans(loansArray.sort((a, b) => b.createdAt - a.createdAt));
-      } else {
-        setLoans([]);
+      try {
+        const data = snapshot.val();
+        console.log("Received loan data from Firebase:", data); // ADD this line
+
+        if (data) {
+          const loansArray = Object.keys(data).map((key) => ({
+            id: key,
+            ...data[key],
+          }));
+          console.log("Processed loans array:", loansArray); // ADD this line
+          setLoans(loansArray.sort((a, b) => b.createdAt - a.createdAt));
+        } else {
+          console.log("No loan data received"); // ADD this line
+          setLoans([]);
+        }
+      } catch (error) {
+        console.error("Error processing loan data:", error); // ADD this line
+        showNotification("Error loading loans: " + error.message, "error");
       }
     });
 
     return unsubscribe;
   }, [user]);
 
+  const handleAddManualReceipt = (loan) => {
+    setSelectedLoan(loan);
+    setShowManualReceipt(true);
+  };
+
+  const handleManualReceiptSave = async (receiptData) => {
+    try {
+      const { amount, ...receiptDetails } = receiptData;
+      const loan = selectedLoan;
+
+      console.log(
+        "Starting manual receipt save for loan:",
+        loan.id,
+        "Amount:",
+        amount
+      );
+
+      // Add manual payment record
+      const paymentKey = await loanService.addPayment(user.uid, loan.id, {
+        ...receiptDetails,
+        amount,
+        type: "manual",
+        timestamp: receiptData.timestamp || Date.now(),
+      });
+
+      console.log("Manual payment added with key:", paymentKey);
+
+      // Calculate new remaining amount
+      const newRemainingAmount = Math.max(
+        0,
+        (loan.remainingAmount || loan.amount) - amount
+      );
+      const newStatus = newRemainingAmount === 0 ? "paid" : "active";
+
+      console.log(
+        "Updating loan - Remaining:",
+        newRemainingAmount,
+        "Status:",
+        newStatus
+      );
+
+      // Update loan status
+      await loanService.updateLoanAfterPayment(
+        user.uid,
+        loan.id,
+        newRemainingAmount,
+        newStatus
+      );
+
+      console.log("Loan updated successfully");
+
+      // Show notification
+      showNotification(
+        `Manual receipt of ₱${amount.toLocaleString()} saved successfully!`
+      );
+
+      // Close modal and clear selected loan
+      setShowManualReceipt(false);
+      setSelectedLoan(null);
+    } catch (error) {
+      console.error("Error saving manual receipt:", error);
+      showNotification(
+        "Error saving manual receipt: " + error.message,
+        "error"
+      );
+    }
+  };
+
   const showNotification = (message, type = "success") => {
-    setNotification({ message, type });
+    console.log("Showing notification:", message, type); // ADD this line
+    // Clear any existing notification first
+    setNotification({ message: "", type: "" });
+
+    // Use setTimeout to ensure the state update happens
+    setTimeout(() => {
+      setNotification({ message, type });
+    }, 100);
   };
 
   const handleSaveLoan = async (loanData) => {
@@ -1548,6 +2149,7 @@ const LoanTrackerApp = () => {
       setShowLoanForm(false);
       setEditingLoan(null);
     } catch (error) {
+      console.error("Error saving loan:", error); // ADD this line
       showNotification("Error saving loan: " + error.message, "error");
     }
   };
@@ -1583,21 +2185,38 @@ const LoanTrackerApp = () => {
       const { amount, proofUrl, proofPublicId } = paymentData;
       const loan = selectedLoan;
 
+      console.log(
+        "Starting proof upload for loan:",
+        loan.id,
+        "Amount:",
+        amount
+      );
+
       // Add payment record first
-      await loanService.addPayment(user.uid, loan.id, {
+      const paymentKey = await loanService.addPayment(user.uid, loan.id, {
         amount,
         proofUrl,
         proofPublicId,
+        timestamp: Date.now(),
       });
+
+      console.log("Payment added with key:", paymentKey);
 
       // Calculate new remaining amount
       const newRemainingAmount = Math.max(
         0,
         (loan.remainingAmount || loan.amount) - amount
       );
-      const newStatus = newRemainingAmount === 0 ? "paid" : loan.status;
+      const newStatus = newRemainingAmount === 0 ? "paid" : "active";
 
-      // Update only the necessary fields without overwriting payments
+      console.log(
+        "Updating loan - Remaining:",
+        newRemainingAmount,
+        "Status:",
+        newStatus
+      );
+
+      // Update the loan
       await loanService.updateLoanAfterPayment(
         user.uid,
         loan.id,
@@ -1605,9 +2224,14 @@ const LoanTrackerApp = () => {
         newStatus
       );
 
+      console.log("Loan updated successfully");
+
+      // Show notification
       showNotification(
         `Payment of ₱${amount.toLocaleString()} recorded successfully!`
       );
+
+      // Close modal and clear selected loan
       setShowProofUpload(false);
       setSelectedLoan(null);
     } catch (error) {
@@ -1702,12 +2326,22 @@ const LoanTrackerApp = () => {
       <main className="px-4 py-6 pb-24">
         {currentView === "dashboard" && <Dashboard loans={loans} />}
         {currentView === "loans" && (
-          <LoanList
-            loans={loans}
-            onEdit={handleEditLoan}
-            onDelete={initiateDelete}
-            onUploadProof={handleUploadProof}
-          />
+          <div className="space-y-4">
+            <FilterSearchBar
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              filters={filters}
+              setFilters={setFilters}
+              loans={loans}
+            />
+            <LoanList
+              loans={filteredLoans} // Use filteredLoans instead of loans
+              onEdit={handleEditLoan}
+              onDelete={initiateDelete}
+              onUploadProof={handleUploadProof}
+              onAddManualReceipt={handleAddManualReceipt}
+            />
+          </div>
         )}
       </main>
 
@@ -1749,7 +2383,7 @@ const LoanTrackerApp = () => {
           setEditingLoan(null);
           setShowLoanForm(true);
         }}
-        className="fixed bottom-23 right-4 w-14 h-14 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-200 transform hover:scale-110 active:scale-95 z-30"
+        className="fixed bottom-25 right-4 w-14 h-14 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-200 transform hover:scale-110 active:scale-95 z-30"
       >
         <Plus className="w-6 h-6 mx-auto" />
       </button>
@@ -1773,6 +2407,16 @@ const LoanTrackerApp = () => {
           setSelectedLoan(null);
         }}
         onUpload={handleProofUpload}
+      />
+
+      <ManualReceiptModal
+        loan={selectedLoan}
+        open={showManualReceipt}
+        onClose={() => {
+          setShowManualReceipt(false);
+          setSelectedLoan(null);
+        }}
+        onSave={handleManualReceiptSave}
       />
 
       {/* ADD Confirmation Modals */}
@@ -1809,6 +2453,191 @@ const LoanTrackerApp = () => {
         type={notification.type}
         onClose={() => setNotification({ message: "", type: "" })}
       />
+    </div>
+  );
+};
+
+const FilterSearchBar = ({
+  searchQuery,
+  setSearchQuery,
+  filters,
+  setFilters,
+  loans,
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+
+  // Calculate filter counts
+  const filterCounts = useMemo(() => {
+    return {
+      all: loans.length,
+      lent: loans.filter((loan) => loan.type === "lent").length,
+      borrowed: loans.filter((loan) => loan.type === "borrowed").length,
+      active: loans.filter((loan) => loan.status === "active").length,
+      paid: loans.filter((loan) => loan.status === "paid").length,
+    };
+  }, [loans]);
+
+  const resetFilters = () => {
+    setFilters({ type: "all", status: "all" });
+    setSearchQuery("");
+    setShowSearch(false);
+  };
+
+  const hasActiveFilters =
+    filters.type !== "all" || filters.status !== "all" || searchQuery;
+
+  return (
+    <div className="mb-4 space-y-3" style={{ marginTop: "-9px" }}>
+      {/* Top Bar with Icons */}
+      <div className="flex items-center gap-2">
+        {/* Search Toggle */}
+        <button
+          onClick={() => setShowSearch(!showSearch)}
+          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 ${
+            showSearch || searchQuery
+              ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+              : "bg-slate-700/50 text-slate-400 hover:text-slate-200 hover:bg-slate-700"
+          }`}
+          title="Search loans"
+        >
+          <Search className="w-4 h-4" />
+        </button>
+
+        {/* Filter Toggle */}
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 ${
+            isExpanded || hasActiveFilters
+              ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+              : "bg-slate-700/50 text-slate-400 hover:text-slate-200 hover:bg-slate-700"
+          }`}
+          title="Filter loans"
+        >
+          <Filter className="w-4 h-4" />
+        </button>
+
+        {/* Active filter indicator */}
+        {hasActiveFilters && (
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="flex items-center gap-1 px-2 py-1 bg-slate-700/50 rounded-lg">
+              <span className="text-slate-300 text-xs">Filtered</span>
+              <button
+                onClick={resetFilters}
+                className="text-slate-400 hover:text-slate-200 transition-colors"
+                title="Clear all filters"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Search Bar */}
+      {showSearch && (
+        <div className="animate-in slide-in-from-top-2 duration-200">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by person name..."
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200 text-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Filter Options */}
+      {isExpanded && (
+        <div className="animate-in slide-in-from-top-2 duration-200 space-y-3 bg-slate-800/30 rounded-xl p-4 border border-slate-600/30">
+          {/* Type Filter */}
+          <div>
+            <label className="block text-slate-300 text-sm font-medium mb-2">
+              Loan Type
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { key: "all", label: "All", count: filterCounts.all },
+                { key: "lent", label: "Lent", count: filterCounts.lent },
+                {
+                  key: "borrowed",
+                  label: "Borrowed",
+                  count: filterCounts.borrowed,
+                },
+              ].map(({ key, label, count }) => (
+                <button
+                  key={key}
+                  onClick={() => setFilters((prev) => ({ ...prev, type: key }))}
+                  className={`p-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                    filters.type === key
+                      ? key === "all"
+                        ? "bg-slate-600 text-white"
+                        : key === "lent"
+                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                        : "bg-red-500/20 text-red-400 border border-red-500/30"
+                      : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
+                  }`}
+                >
+                  {label} ({count})
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Status Filter */}
+          <div>
+            <label className="block text-slate-300 text-sm font-medium mb-2">
+              Status
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { key: "all", label: "All", count: filterCounts.all },
+                { key: "active", label: "Active", count: filterCounts.active },
+                { key: "paid", label: "Paid", count: filterCounts.paid },
+              ].map(({ key, label, count }) => (
+                <button
+                  key={key}
+                  onClick={() =>
+                    setFilters((prev) => ({ ...prev, status: key }))
+                  }
+                  className={`p-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                    filters.status === key
+                      ? key === "all"
+                        ? "bg-slate-600 text-white"
+                        : key === "active"
+                        ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                        : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                      : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
+                  }`}
+                >
+                  {label} ({count})
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Clear All Filters Button */}
+          {hasActiveFilters && (
+            <button
+              onClick={resetFilters}
+              className="w-full p-2 bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors"
+            >
+              Clear All Filters
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 };
