@@ -416,7 +416,9 @@ const LoginForm = () => {
       <div className="w-full max-w-sm bg-white/5 backdrop-blur-xl rounded-3xl p-8 border border-white/10 shadow-2xl animate-in slide-in-from-bottom-4 duration-700">
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-6 transform rotate-3 shadow-lg">
-            <DollarSign className="w-10 h-10 text-white" />
+            <span className="w-10 h-10 text-white text-5xl font-bold flex items-center justify-center">
+              ₱
+            </span>
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">
             {isSignUp ? "Join Us" : "Welcome Back"}
@@ -985,11 +987,6 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
       return;
     }
 
-    if (!formData.witnessName.trim()) {
-      setError("Please enter witness name for verification");
-      return;
-    }
-
     try {
       // Call onSave and wait for it to complete
       await onSave({
@@ -1120,7 +1117,7 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-300 text-sm font-medium mb-2">
-                Witness Name
+                Witness Name (Optional)
               </label>
               <input
                 type="text"
@@ -1128,13 +1125,12 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
                 onChange={(e) => updateFormData("witnessName", e.target.value)}
                 className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
                 placeholder="Full name"
-                required
               />
             </div>
 
             <div>
               <label className="block text-slate-300 text-sm font-medium mb-2">
-                Witness Contact
+                Witness Contact (Optional)
               </label>
               <input
                 type="text"
@@ -1692,39 +1688,6 @@ const LoanList = ({
                   </div>
                 </div>
               </div>
-
-              <div className="flex gap-1 ml-2 flex-shrink-0">
-                {remainingAmount > 0 && loan.status === "active" && (
-                  <>
-                    <button
-                      onClick={() => onUploadProof(loan)}
-                      className="w-8 h-8 rounded-lg bg-slate-700/50 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-all duration-200 flex items-center justify-center"
-                      title="Upload proof"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => onAddManualReceipt(loan)} // NEW HANDLER
-                      className="w-8 h-8 rounded-lg bg-slate-700/50 hover:bg-green-500/20 text-slate-400 hover:text-green-400 transition-all duration-200 flex items-center justify-center"
-                      title="Manual receipt"
-                    >
-                      <FileImage className="w-3.5 h-3.5" />
-                    </button>
-                  </>
-                )}
-                <button
-                  onClick={() => onEdit(loan)}
-                  className="w-8 h-8 rounded-lg bg-slate-700/50 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400 transition-all duration-200 flex items-center justify-center"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => onDelete(loan)}
-                  className="w-8 h-8 rounded-lg bg-slate-700/50 hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-all duration-200 flex items-center justify-center"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
             </div>
 
             {/* Compact Amount Info */}
@@ -1802,8 +1765,48 @@ const LoanList = ({
 
             {/* Collapsible Payment History */}
             {hasPayments && (
-              <PaymentHistory payments={loan.payments} loan={loan} />
+              <div className="mb-3">
+                <PaymentHistory payments={loan.payments} loan={loan} />
+              </div>
             )}
+
+            {/* NEW: Action buttons moved to bottom in a horizontal row */}
+            <div className="flex gap-2 pt-2 border-t border-slate-600/30">
+              {remainingAmount > 0 && loan.status === "active" && (
+                <>
+                  <button
+                    onClick={() => onUploadProof(loan)}
+                    className="flex-1 flex items-center justify-center gap-1 py-2 px-3 bg-slate-700/50 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 rounded-lg transition-all duration-200 text-xs font-medium"
+                    title="Upload proof"
+                  >
+                    <Upload className="w-3 h-3" />
+                    Proof
+                  </button>
+                  <button
+                    onClick={() => onAddManualReceipt(loan)}
+                    className="flex-1 flex items-center justify-center gap-1 py-2 px-3 bg-slate-700/50 hover:bg-green-500/20 text-slate-400 hover:text-green-400 rounded-lg transition-all duration-200 text-xs font-medium"
+                    title="Manual receipt"
+                  >
+                    <FileImage className="w-3 h-3" />
+                    Receipt
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => onEdit(loan)}
+                className="flex-1 flex items-center justify-center gap-1 py-2 px-3 bg-slate-700/50 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400 rounded-lg transition-all duration-200 text-xs font-medium"
+              >
+                <Edit3 className="w-3 h-3" />
+                Edit
+              </button>
+              <button
+                onClick={() => onDelete(loan)}
+                className="flex-1 flex items-center justify-center gap-1 py-2 px-3 bg-slate-700/50 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg transition-all duration-200 text-xs font-medium"
+              >
+                <Trash2 className="w-3 h-3" />
+                Delete
+              </button>
+            </div>
 
             {/* Latest Proof Link - Only if no payment history shown */}
             {hasPayments &&
@@ -2470,13 +2473,20 @@ const FilterSearchBar = ({
   // Calculate filter counts
   const filterCounts = useMemo(() => {
     return {
-      all: loans.length,
-      lent: loans.filter((loan) => loan.type === "lent").length,
-      borrowed: loans.filter((loan) => loan.type === "borrowed").length,
-      active: loans.filter((loan) => loan.status === "active").length,
-      paid: loans.filter((loan) => loan.status === "paid").length,
+      all: loans ? loans.length : 0,
+      lent: loans ? loans.filter((loan) => loan.type === "lent").length : 0,
+      borrowed: loans
+        ? loans.filter((loan) => loan.type === "borrowed").length
+        : 0,
+      active: loans
+        ? loans.filter((loan) => loan.status === "active").length
+        : 0,
+      paid: loans ? loans.filter((loan) => loan.status === "paid").length : 0,
     };
   }, [loans]);
+
+  // Only show filter bar if there are loans
+  if (!loans || loans.length === 0) return null;
 
   const resetFilters = () => {
     setFilters({ type: "all", status: "all" });
@@ -2488,7 +2498,7 @@ const FilterSearchBar = ({
     filters.type !== "all" || filters.status !== "all" || searchQuery;
 
   return (
-    <div className="mb-4 space-y-3" style={{ marginTop: "-9px" }}>
+    <div className="mb-4 space-y-3" style={{ marginTop: "-8px" }}>
       {/* Top Bar with Icons */}
       <div className="flex items-center gap-2">
         {/* Search Toggle */}
