@@ -4,6 +4,7 @@ import React, {
   createContext,
   useContext,
   useMemo,
+  useCallback,
 } from "react";
 import {
   Plus,
@@ -465,7 +466,7 @@ const Button = ({
   );
 };
 
-const Card = ({ children, className = "", hover = true }) => (
+const Card = ({ children, className = "", hover = true, ...props }) => (
   <div
     className={`bg-slate-800/60 backdrop-blur-sm border border-slate-600/40 rounded-2xl p-4 ${
       // Changed from p-6 to p-4
@@ -473,6 +474,7 @@ const Card = ({ children, className = "", hover = true }) => (
         ? "hover:bg-slate-800/80 transition-all duration-200 transform hover:scale-[1.01]"
         : ""
     } ${className}`}
+    {...props}
   >
     {children}
   </div>
@@ -1322,10 +1324,11 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
           </div>
 
           {/* Witness Information */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-3">
             <div>
               <label className="block text-slate-300 text-sm font-medium mb-2">
-                Witness Name (Optional)
+                Witness Name{" "}
+                <span className="text-slate-500 text-xs">(Optional)</span>
               </label>
               <input
                 type="text"
@@ -1338,7 +1341,8 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
 
             <div>
               <label className="block text-slate-300 text-sm font-medium mb-2">
-                Witness Contact (Optional)
+                Witness Contact{" "}
+                <span className="text-slate-500 text-xs">(Optional)</span>
               </label>
               <input
                 type="text"
@@ -1346,7 +1350,7 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
                 onChange={(e) =>
                   updateFormData("witnessContact", e.target.value)
                 }
-                className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+                className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-small"
                 placeholder="Phone/Email"
               />
             </div>
@@ -1846,29 +1850,62 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
   );
 };
 
-// Replace the getDueDateStatus function (around line 1450-1470)
 const getDueDateStatus = (loan) => {
-  // CHANGE: Accept full loan object instead of just dueDate
   if (!loan?.dueDate || loan.status === "paid") return null;
 
-  // ADDITIONAL CHECK: Don't show due date status if remaining amount is 0
   const remainingAmount =
     parseFloat(loan.remainingAmount) || parseFloat(loan.amount) || 0;
   if (remainingAmount === 0) return null;
 
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   const due = new Date(loan.dueDate);
+  due.setHours(0, 0, 0, 0);
+
   const diffTime = due.getTime() - today.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) {
-    return { status: "overdue", days: Math.abs(diffDays), color: "red" };
+    return {
+      status: "overdue",
+      days: Math.abs(diffDays),
+      color: "red",
+      isOverdue: true,
+      isDueSoon: false,
+    };
+  } else if (diffDays === 0) {
+    return {
+      status: "due-today",
+      days: 0,
+      color: "red",
+      isOverdue: true,
+      isDueSoon: false,
+    };
   } else if (diffDays <= 3) {
-    return { status: "due-soon", days: diffDays, color: "amber" };
+    return {
+      status: "due-soon",
+      days: diffDays,
+      color: "amber",
+      isOverdue: false,
+      isDueSoon: true,
+    };
   } else if (diffDays <= 7) {
-    return { status: "upcoming", days: diffDays, color: "blue" };
+    return {
+      status: "upcoming",
+      days: diffDays,
+      color: "blue",
+      isOverdue: false,
+      isDueSoon: false,
+    };
   }
-  return { status: "normal", days: diffDays, color: "slate" };
+  return {
+    status: "normal",
+    days: diffDays,
+    color: "slate",
+    isOverdue: false,
+    isDueSoon: false,
+  };
 };
 
 // Enhanced Loan List Component
@@ -1879,6 +1916,7 @@ const LoanList = ({
   onUploadProof,
   onAddManualReceipt,
   onDeletePayment, // ADD this line
+  highlightedLoanId,
 }) => {
   if (loans.length === 0) {
     return (
@@ -1897,7 +1935,10 @@ const LoanList = ({
   }
 
   return (
-    <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
+    <div
+      className="space-y-4 animate-in slide-in-from-bottom-4 duration-500"
+      data-loans-container
+    >
       {loans.map((loan, index) => {
         if (!loan) return null;
 
@@ -1907,9 +1948,11 @@ const LoanList = ({
         const totalPaid = Math.max(0, originalAmount - remainingAmount);
 
         const dueDateStatus = getDueDateStatus(loan);
-        const isDueSoon =
-          dueDateStatus &&
-          ["overdue", "due-soon"].includes(dueDateStatus.status);
+
+        // Ensure loan.id exists, fallback to index or create a unique ID
+        const loanId = loan.id || `loan-${index}-${Date.now()}`;
+
+        console.log("Rendering loan with ID:", loanId, "Loan object:", loan); // Debug log
 
         // Compute payments array directly, not using useMemo
         let payments = [];
@@ -1937,15 +1980,20 @@ const LoanList = ({
 
         return (
           <Card
-            key={loan.id || index}
-            className={`animate-in slide-in-from-bottom-2 p-4 relative ${
-              isDueSoon
-                ? dueDateStatus?.status === "overdue"
-                  ? "ring-2 ring-red-400/50 shadow-lg shadow-red-500/10 animate-pulse border-red-400/30"
-                  : "ring-2 ring-amber-400/50 shadow-lg shadow-amber-500/10 animate-pulse border-amber-400/30"
+            key={loanId}
+            className={`animate-in slide-in-from-bottom-2 p-4 relative transition-all duration-500 ${
+              dueDateStatus?.isOverdue
+                ? "ring-2 ring-red-400/50 shadow-lg shadow-red-500/10 border-red-400/30 bg-red-500/5"
+                : dueDateStatus?.isDueSoon
+                ? "ring-2 ring-amber-400/50 shadow-lg shadow-amber-500/10 border-amber-400/30 bg-amber-500/5"
+                : ""
+            } ${dueDateStatus?.isOverdue ? "animate-pulse" : ""} ${
+              highlightedLoanId === loan.id
+                ? "ring-4 ring-emerald-400/70 shadow-2xl shadow-emerald-500/20 animate-pulse scale-105"
                 : ""
             }`}
             style={{ animationDelay: `${index * 50}ms` }}
+            data-loan-id={loanId}
           >
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -1975,11 +2023,12 @@ const LoanList = ({
                     >
                       {loan.status === "active" ? "Active" : "Paid"}
                     </span>
-                    {/* ADD due date badge here with existing badges */}
+                    {/* FIXED: Due date badge with proper coloring for due today */}
                     {dueDateStatus && (
                       <span
                         className={`px-2 py-0.5 text-xs rounded-full font-medium ${
-                          dueDateStatus.status === "overdue"
+                          dueDateStatus.status === "overdue" ||
+                          dueDateStatus.status === "due-today"
                             ? "bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse"
                             : dueDateStatus.status === "due-soon"
                             ? "bg-amber-500/30 text-amber-300 border border-amber-500/40 animate-pulse"
@@ -1990,10 +2039,10 @@ const LoanList = ({
                       >
                         {dueDateStatus.status === "overdue"
                           ? `${dueDateStatus.days}d overdue`
+                          : dueDateStatus.status === "due-today"
+                          ? "Due today"
                           : dueDateStatus.status === "due-soon"
-                          ? dueDateStatus.days === 0
-                            ? "Due today"
-                            : `Due in ${dueDateStatus.days}d`
+                          ? `Due in ${dueDateStatus.days}d`
                           : `${dueDateStatus.days}d left`}
                       </span>
                     )}
@@ -2061,16 +2110,16 @@ const LoanList = ({
                   {new Date(loan.date).toLocaleDateString("en-US", {
                     month: "short",
                     day: "numeric",
-                    year: "2-digit",
+                    year: "numeric",
                   })}
                 </p>
                 {loan.dueDate && (
                   <p
                     className={`text-xs mt-0.5 ${
-                      dueDateStatus?.status === "overdue"
-                        ? "text-red-400 font-medium"
-                        : dueDateStatus?.status === "due-soon"
-                        ? "text-amber-400 font-medium"
+                      dueDateStatus?.isOverdue
+                        ? "text-red-400 font-bold animate-pulse"
+                        : dueDateStatus?.isDueSoon
+                        ? "text-amber-400 font-semibold"
                         : "text-slate-400"
                     }`}
                   >
@@ -2078,8 +2127,10 @@ const LoanList = ({
                     {new Date(loan.dueDate).toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
-                      year: "2-digit",
+                      year: "numeric",
                     })}
+                    {dueDateStatus?.isOverdue && " ⚠️"}
+                    {dueDateStatus?.status === "due-today" && " (TODAY)"}
                   </p>
                 )}
               </div>
@@ -2178,7 +2229,7 @@ const Notification = ({ message, type, onClose }) => {
     const timer = setTimeout(() => {
       console.log("Auto-closing notification"); // ADD this line
       onClose();
-    }, 4000);
+    }, 5000);
     return () => clearTimeout(timer);
   }, [message, type, onClose]);
 
@@ -2345,6 +2396,71 @@ const LoanTrackerApp = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState({ type: "all", status: "all" });
 
+  const [highlightedLoanId, setHighlightedLoanId] = useState(null);
+
+  const scrollToLoan = useCallback(
+    (loanId) => {
+      console.log("Attempting to scroll to loan:", loanId);
+
+      // Ensure we're on the loans view first
+      if (currentView !== "loans") {
+        setCurrentView("loans");
+        // Wait for view to switch before scrolling
+        setTimeout(() => {
+          attemptScroll(loanId);
+        }, 300); // Increased timeout for better reliability
+      } else {
+        attemptScroll(loanId);
+      }
+    },
+    [currentView]
+  );
+
+  // Helper function to attempt scrolling
+  const attemptScroll = (loanId) => {
+    // Add a small delay to ensure DOM is fully rendered
+    setTimeout(() => {
+      // Try multiple selectors to find the loan element
+      let loanElement = document.querySelector(`[data-loan-id="${loanId}"]`);
+
+      // If not found, try with string conversion
+      if (!loanElement) {
+        loanElement = document.querySelector(`[data-loan-id='${loanId}']`);
+      }
+
+      // Debug: Log all loan elements to see what's available
+      const allLoanElements = document.querySelectorAll("[data-loan-id]");
+      console.log(
+        "Available loan elements:",
+        Array.from(allLoanElements).map((el) => el.getAttribute("data-loan-id"))
+      );
+      console.log("Looking for loan ID:", loanId);
+
+      if (loanElement) {
+        console.log("Found loan element, scrolling...");
+        loanElement.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+
+        // Highlight the loan
+        setHighlightedLoanId(loanId);
+        // Remove highlight after animation
+        setTimeout(() => setHighlightedLoanId(null), 2000);
+      } else {
+        console.warn("Loan element not found for ID:", loanId);
+        // Fallback: scroll to top of loans list
+        const loansContainer = document.querySelector("[data-loans-container]");
+        if (loansContainer) {
+          loansContainer.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }
+      }
+    }, 100); // Small delay to ensure DOM is ready
+  };
+
   const filteredLoans = useMemo(() => {
     let filtered = loans;
 
@@ -2393,31 +2509,42 @@ const LoanTrackerApp = () => {
   useEffect(() => {
     if (!user) return;
 
-    console.log("Setting up loan subscription for user:", user.uid); // ADD this line
+    console.log("Setting up loan subscription for user:", user.uid);
+
+    let isSubscribed = true; // Prevent state updates after unmount
 
     const unsubscribe = loanService.subscribeToLoans(user.uid, (snapshot) => {
       try {
+        if (!isSubscribed) return; // Prevent updates if component unmounted
+
         const data = snapshot.val();
-        console.log("Received loan data from Firebase:", data); // ADD this line
+        console.log("Received loan data from Firebase:", data);
 
         if (data) {
           const loansArray = Object.keys(data).map((key) => ({
             id: key,
             ...data[key],
           }));
-          console.log("Processed loans array:", loansArray); // ADD this line
-          setLoans(loansArray.sort((a, b) => b.createdAt - a.createdAt));
+          console.log("Processed loans array:", loansArray);
+          setLoans(
+            loansArray.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+          );
         } else {
-          console.log("No loan data received"); // ADD this line
+          console.log("No loan data received");
           setLoans([]);
         }
       } catch (error) {
-        console.error("Error processing loan data:", error); // ADD this line
-        showNotification("Error loading loans: " + error.message, "error");
+        console.error("Error processing loan data:", error);
+        if (isSubscribed) {
+          showNotification("Error loading loans: " + error.message, "error");
+        }
       }
     });
 
-    return unsubscribe;
+    return () => {
+      isSubscribed = false;
+      unsubscribe();
+    };
   }, [user]);
 
   const handleAddManualReceipt = (loan) => {
@@ -2437,43 +2564,73 @@ const LoanTrackerApp = () => {
         amount
       );
 
-      // Add manual payment record
+      // Add manual payment record with better error handling
       const paymentKey = await loanService.addPayment(user.uid, loan.id, {
         ...receiptDetails,
-        amount,
+        amount: parseFloat(amount), // Ensure it's a number
         type: "manual",
         timestamp: receiptData.timestamp || Date.now(),
       });
 
       console.log("Manual payment added with key:", paymentKey);
 
+      if (!paymentKey) {
+        throw new Error("Failed to create payment record");
+      }
+
+      // Wait a bit for Firebase to process
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       // Calculate new remaining amount
+      const currentRemaining =
+        parseFloat(loan.remainingAmount) || parseFloat(loan.amount) || 0;
       const newRemainingAmount = Math.max(
         0,
-        (loan.remainingAmount || loan.amount) - amount
+        currentRemaining - parseFloat(amount)
       );
       const newStatus = newRemainingAmount === 0 ? "paid" : "active";
 
       console.log(
-        "Updating loan - Remaining:",
+        "Updating loan - Current:",
+        currentRemaining,
+        "Payment:",
+        amount,
+        "New Remaining:",
         newRemainingAmount,
         "Status:",
         newStatus
       );
 
-      // Update loan status
-      await loanService.updateLoanAfterPayment(
-        user.uid,
-        loan.id,
-        newRemainingAmount,
-        newStatus
-      );
+      // Update loan status with retry mechanism
+      let retryCount = 0;
+      const maxRetries = 3;
 
-      console.log("Loan updated successfully");
+      while (retryCount < maxRetries) {
+        try {
+          await loanService.updateLoanAfterPayment(
+            user.uid,
+            loan.id,
+            newRemainingAmount,
+            newStatus
+          );
+          console.log("Loan updated successfully");
+          break;
+        } catch (updateError) {
+          retryCount++;
+          console.warn(
+            `Loan update attempt ${retryCount} failed:`,
+            updateError
+          );
+          if (retryCount >= maxRetries) throw updateError;
+          await new Promise((resolve) => setTimeout(resolve, 200 * retryCount));
+        }
+      }
 
       // Show notification
       showNotification(
-        `Manual receipt of ₱${amount.toLocaleString()} saved successfully!`
+        `Manual receipt of ₱${parseFloat(
+          amount
+        ).toLocaleString()} saved successfully!`
       );
 
       // Close modal and clear selected loan
@@ -2528,29 +2685,37 @@ const LoanTrackerApp = () => {
   };
 
   const showNotification = (message, type = "success") => {
-    console.log("Showing notification:", message, type); // ADD this line
-    // Clear any existing notification first
+    console.log("Showing notification:", message, type);
+
     setNotification({ message: "", type: "" });
 
-    // Use setTimeout to ensure the state update happens
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       setNotification({ message, type });
-    }, 100);
+    });
   };
 
   const handleSaveLoan = async (loanData) => {
     try {
+      console.log("Saving loan:", loanData);
+
+      let result;
       if (loanData.id) {
-        await loanService.updateLoan(user.uid, loanData.id, loanData);
+        result = await loanService.updateLoan(user.uid, loanData.id, loanData);
         showNotification("Loan updated successfully!");
       } else {
-        await loanService.addLoan(user.uid, loanData);
+        result = await loanService.addLoan(user.uid, loanData);
         showNotification("Loan added successfully!");
       }
+
+      console.log("Loan save result:", result);
+
+      // Wait a bit for Firebase to process
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       setShowLoanForm(false);
       setEditingLoan(null);
     } catch (error) {
-      console.error("Error saving loan:", error); // ADD this line
+      console.error("Error saving loan:", error);
       showNotification("Error saving loan: " + error.message, "error");
     }
   };
@@ -2593,9 +2758,9 @@ const LoanTrackerApp = () => {
         amount
       );
 
-      // Add payment record first
+      // Add payment record first with better error handling
       const paymentKey = await loanService.addPayment(user.uid, loan.id, {
-        amount,
+        amount: parseFloat(amount), // Ensure it's a number
         proofUrl,
         proofPublicId,
         timestamp: Date.now(),
@@ -2603,33 +2768,63 @@ const LoanTrackerApp = () => {
 
       console.log("Payment added with key:", paymentKey);
 
+      if (!paymentKey) {
+        throw new Error("Failed to create payment record");
+      }
+
+      // Wait a bit for Firebase to process
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       // Calculate new remaining amount
+      const currentRemaining =
+        parseFloat(loan.remainingAmount) || parseFloat(loan.amount) || 0;
       const newRemainingAmount = Math.max(
         0,
-        (loan.remainingAmount || loan.amount) - amount
+        currentRemaining - parseFloat(amount)
       );
       const newStatus = newRemainingAmount === 0 ? "paid" : "active";
 
       console.log(
-        "Updating loan - Remaining:",
+        "Updating loan - Current:",
+        currentRemaining,
+        "Payment:",
+        amount,
+        "New Remaining:",
         newRemainingAmount,
         "Status:",
         newStatus
       );
 
-      // Update the loan
-      await loanService.updateLoanAfterPayment(
-        user.uid,
-        loan.id,
-        newRemainingAmount,
-        newStatus
-      );
+      // Update the loan with retry mechanism
+      let retryCount = 0;
+      const maxRetries = 3;
 
-      console.log("Loan updated successfully");
+      while (retryCount < maxRetries) {
+        try {
+          await loanService.updateLoanAfterPayment(
+            user.uid,
+            loan.id,
+            newRemainingAmount,
+            newStatus
+          );
+          console.log("Loan updated successfully");
+          break;
+        } catch (updateError) {
+          retryCount++;
+          console.warn(
+            `Loan update attempt ${retryCount} failed:`,
+            updateError
+          );
+          if (retryCount >= maxRetries) throw updateError;
+          await new Promise((resolve) => setTimeout(resolve, 200 * retryCount));
+        }
+      }
 
       // Show notification
       showNotification(
-        `Payment of ₱${amount.toLocaleString()} recorded successfully!`
+        `Payment of ₱${parseFloat(
+          amount
+        ).toLocaleString()} recorded successfully!`
       );
 
       // Close modal and clear selected loan
@@ -2735,7 +2930,7 @@ const LoanTrackerApp = () => {
               setFilters={setFilters}
               loans={loans}
             />
-            <DueDateWarning loans={loans} />
+            <DueDateWarning loans={loans} onLoanClick={scrollToLoan} />
             <LoanList
               loans={filteredLoans}
               onEdit={handleEditLoan}
@@ -2743,6 +2938,7 @@ const LoanTrackerApp = () => {
               onUploadProof={handleUploadProof}
               onAddManualReceipt={handleAddManualReceipt}
               onDeletePayment={handleDeletePayment}
+              highlightedLoanId={highlightedLoanId}
             />
           </div>
         )}
@@ -3107,8 +3303,7 @@ const FilterSearchBar = ({
   );
 };
 
-// Replace the DueDateWarning component (around line 2650-2750)
-const DueDateWarning = ({ loans }) => {
+const DueDateWarning = ({ loans, onLoanClick }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const dueDateAnalysis = useMemo(() => {
@@ -3116,15 +3311,13 @@ const DueDateWarning = ({ loans }) => {
       return { urgent: [], warning: [], count: 0 };
 
     const now = new Date();
-    const urgent = []; // Overdue and due today
-    const warning = []; // Due in 1-3 days
+    const urgent = [];
+    const warning = [];
 
     loans.forEach((loan) => {
-      // CHANGE: Only process loans that are active AND not paid
       if (loan.status !== "active" || !loan.dueDate || loan.status === "paid")
         return;
 
-      // ADDITIONAL CHECK: Skip if remaining amount is 0 (effectively paid)
       const remainingAmount =
         parseFloat(loan.remainingAmount) || parseFloat(loan.amount) || 0;
       if (remainingAmount === 0) return;
@@ -3133,10 +3326,19 @@ const DueDateWarning = ({ loans }) => {
       const diffTime = dueDate.getTime() - now.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
+      // FIXED: Include "due today" (0 days) in urgent list
       if (diffDays <= 0) {
-        urgent.push({ ...loan, daysOverdue: Math.abs(diffDays) });
+        urgent.push({
+          ...loan,
+          daysOverdue: Math.abs(diffDays),
+          loanId: loan.id, // Ensure loan ID is preserved
+        });
       } else if (diffDays <= 3) {
-        warning.push({ ...loan, daysLeft: diffDays });
+        warning.push({
+          ...loan,
+          daysLeft: diffDays,
+          loanId: loan.id, // Ensure loan ID is preserved
+        });
       }
     });
 
@@ -3148,6 +3350,16 @@ const DueDateWarning = ({ loans }) => {
   }, [loans]);
 
   if (dueDateAnalysis.count === 0) return null;
+
+  const handleLoanItemClick = (loan) => {
+    console.log("Due date warning clicked for loan:", loan.id || loan.loanId);
+    if (onLoanClick) {
+      const loanId =
+        loan.id || loan.loanId || `loan-${loan.personName}-${Date.now()}`;
+      console.log("Calling onLoanClick with ID:", loanId); // Add debug log
+      onLoanClick(loanId);
+    }
+  };
 
   return (
     <div className="mb-4">
@@ -3209,9 +3421,10 @@ const DueDateWarning = ({ loans }) => {
       {isExpanded && (
         <div className="mt-3 space-y-2 animate-in slide-in-from-top-2 duration-200">
           {dueDateAnalysis.urgent.map((loan, index) => (
-            <div
-              key={loan.id || index}
-              className="p-3 bg-red-500/5 border border-red-500/20 rounded-lg"
+            <button
+              key={loan.id || `urgent-${index}`}
+              onClick={() => handleLoanItemClick(loan)}
+              className="w-full p-3 bg-red-500/5 border border-red-500/20 rounded-lg hover:bg-red-500/10 transition-all duration-200 active:scale-95"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -3220,11 +3433,12 @@ const DueDateWarning = ({ loans }) => {
                       {loan.personName.charAt(0).toUpperCase()}
                     </span>
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 text-left">
                     <p className="text-white font-medium text-sm truncate">
                       {loan.personName}
                     </p>
                     <p className="text-red-400 text-xs">
+                      {/* FIXED: Show "Due today" for 0 days overdue */}
                       {loan.daysOverdue === 0
                         ? "Due today"
                         : `${loan.daysOverdue} day${
@@ -3242,13 +3456,14 @@ const DueDateWarning = ({ loans }) => {
                   </span>
                 </div>
               </div>
-            </div>
+            </button>
           ))}
 
           {dueDateAnalysis.warning.map((loan, index) => (
-            <div
-              key={loan.id || index}
-              className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg"
+            <button
+              key={loan.id || `warning-${index}`}
+              onClick={() => handleLoanItemClick(loan)}
+              className="w-full p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg hover:bg-amber-500/10 transition-all duration-200 active:scale-95"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -3257,7 +3472,7 @@ const DueDateWarning = ({ loans }) => {
                       {loan.personName.charAt(0).toUpperCase()}
                     </span>
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 text-left">
                     <p className="text-white font-medium text-sm truncate">
                       {loan.personName}
                     </p>
@@ -3275,7 +3490,7 @@ const DueDateWarning = ({ loans }) => {
                   </span>
                 </div>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}
