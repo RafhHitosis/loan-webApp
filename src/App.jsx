@@ -71,8 +71,8 @@ const auth = getAuth(app);
 const database = getDatabase(app);
 
 // Cloudinary Config
-const CLOUDINARY_UPLOAD_PRESET = "receipt_upload"; // Replace with your preset
-const CLOUDINARY_CLOUD_NAME = "dpiupmmsg"; // Replace with your cloud name
+const CLOUDINARY_UPLOAD_PRESET = "receipt_upload";
+const CLOUDINARY_CLOUD_NAME = "dpiupmmsg";
 
 // Auth Context
 const AuthContext = createContext();
@@ -261,6 +261,81 @@ const loanService = {
     onValue(loansRef, callback);
     return () => off(loansRef, "value", callback);
   },
+
+  deletePayment: async (userId, loanId, paymentId) => {
+    if (!userId || !loanId || !paymentId) {
+      throw new Error("User ID, Loan ID, and Payment ID are required");
+    }
+
+    try {
+      const paymentRef = ref(
+        database,
+        `loans/${userId}/${loanId}/payments/${paymentId}`
+      );
+
+      // Get the payment data before deleting to calculate refund amount
+      const paymentSnapshot = await get(paymentRef);
+      if (!paymentSnapshot.exists()) {
+        throw new Error("Payment not found");
+      }
+
+      const paymentData = paymentSnapshot.val();
+      const refundAmount = parseFloat(paymentData.amount) || 0;
+
+      // Delete the payment
+      await remove(paymentRef);
+
+      return { refundAmount, paymentData };
+    } catch (error) {
+      console.error("Error deleting payment:", error);
+      throw new Error(`Failed to delete payment: ${error.message}`);
+    }
+  },
+
+  // ADD this method to update loan after payment deletion
+  updateLoanAfterPaymentDeletion: async (userId, loanId, refundAmount) => {
+    if (!userId || !loanId) {
+      throw new Error("User ID and Loan ID are required");
+    }
+
+    try {
+      const loanRef = ref(database, `loans/${userId}/${loanId}`);
+      const loanSnapshot = await get(loanRef);
+
+      if (!loanSnapshot.exists()) {
+        throw new Error("Loan not found");
+      }
+
+      const currentLoan = loanSnapshot.val();
+      const currentRemaining = parseFloat(currentLoan.remainingAmount) || 0;
+      const originalAmount = parseFloat(currentLoan.amount) || 0;
+
+      // Add the refund amount back to remaining
+      const newRemainingAmount = Math.min(
+        originalAmount,
+        currentRemaining + refundAmount
+      );
+
+      // Determine new status
+      const newStatus =
+        newRemainingAmount === originalAmount
+          ? "active"
+          : newRemainingAmount === 0
+          ? "paid"
+          : "active";
+
+      const updates = {
+        [`loans/${userId}/${loanId}/remainingAmount`]: newRemainingAmount,
+        [`loans/${userId}/${loanId}/status`]: newStatus,
+        [`loans/${userId}/${loanId}/updatedAt`]: Date.now(),
+      };
+
+      return await update(ref(database), updates);
+    } catch (error) {
+      console.error("Error updating loan after payment deletion:", error);
+      throw new Error(`Failed to update loan: ${error.message}`);
+    }
+  },
 };
 
 // Cloudinary Service
@@ -283,6 +358,59 @@ const cloudinaryService = {
     }
 
     return await response.json();
+  },
+
+  // ADD this new method for deleting images
+  deleteImage: async (publicId) => {
+    if (!publicId) return;
+
+    try {
+      // Note: For security, image deletion usually requires server-side implementation
+      // This is a client-side approach that may have limitations
+      const timestamp = Math.round(new Date().getTime() / 1000);
+      const apiSecret = import.meta.env.VITE_CLOUDINARY_API_SECRET; // You'll need to add this to env
+
+      if (!apiSecret) {
+        console.warn(
+          "Cloudinary API secret not found. Image deletion skipped."
+        );
+        return;
+      }
+
+      // Generate signature for secure deletion
+      const stringToSign = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
+      const signature = await crypto.subtle.digest(
+        "SHA-1",
+        new TextEncoder().encode(stringToSign)
+      );
+      const signatureHex = Array.from(new Uint8Array(signature))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      const formData = new FormData();
+      formData.append("public_id", publicId);
+      formData.append("timestamp", timestamp);
+      formData.append("api_key", import.meta.env.VITE_CLOUDINARY_API_KEY);
+      formData.append("signature", signatureHex);
+
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/destroy`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        console.warn(
+          "Failed to delete image from Cloudinary:",
+          await response.text()
+        );
+      }
+    } catch (error) {
+      console.warn("Error deleting image from Cloudinary:", error);
+      // Don't throw error - deletion should not fail if Cloudinary cleanup fails
+    }
   },
 };
 
@@ -621,10 +749,12 @@ const Dashboard = ({ loans }) => {
 };
 
 // Payment History Component
-const PaymentHistory = ({ payments = {}, loan }) => {
+const PaymentHistory = ({ payments = {}, loan, onDeletePayment }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); // ADD this
+  const [paymentToDelete, setPaymentToDelete] = useState(null); // ADD this
 
   const paymentsArray = useMemo(() => {
     if (!payments || typeof payments !== "object") {
@@ -632,10 +762,11 @@ const PaymentHistory = ({ payments = {}, loan }) => {
     }
 
     try {
-      return Object.values(payments)
-        .filter((payment) => payment && typeof payment === "object")
-        .map((payment) => ({
+      return Object.entries(payments)
+        .filter(([, payment]) => payment && typeof payment === "object")
+        .map(([paymentId, payment]) => ({
           ...payment,
+          id: paymentId,
           amount: parseFloat(payment.amount) || 0,
           timestamp: payment.timestamp || Date.now(),
         }))
@@ -649,6 +780,27 @@ const PaymentHistory = ({ payments = {}, loan }) => {
   const handleViewReceipt = (payment) => {
     setSelectedReceipt({ payment, loan });
     setShowReceiptModal(true);
+  };
+
+  // MODIFY this function to show confirmation modal instead of direct deletion
+  const handleDeleteReceipt = async (payment) => {
+    setPaymentToDelete(payment);
+    setShowDeleteConfirm(true);
+  };
+
+  // ADD this new function to handle confirmed deletion
+  const handleConfirmDelete = async () => {
+    try {
+      if (onDeletePayment && paymentToDelete) {
+        await onDeletePayment(paymentToDelete, loan);
+      }
+      setShowDeleteConfirm(false);
+      setPaymentToDelete(null);
+    } catch (error) {
+      console.error("Error deleting payment:", error);
+      setShowDeleteConfirm(false);
+      setPaymentToDelete(null);
+    }
   };
 
   if (!paymentsArray.length) {
@@ -690,11 +842,20 @@ const PaymentHistory = ({ payments = {}, loan }) => {
                   <span className="text-emerald-300 font-semibold text-sm">
                     ₱{(payment.amount || 0).toLocaleString()}
                   </span>
-                  <span className="text-slate-400 text-xs">
-                    {payment.timestamp
-                      ? new Date(payment.timestamp).toLocaleDateString()
-                      : "Unknown"}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400 text-xs">
+                      {payment.timestamp
+                        ? new Date(payment.timestamp).toLocaleDateString()
+                        : "Unknown"}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteReceipt(payment)}
+                      className="text-red-400 hover:text-red-300 transition-colors p-1 rounded"
+                      title="Delete payment"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -704,9 +865,7 @@ const PaymentHistory = ({ payments = {}, loan }) => {
                         Manual Receipt
                       </span>
                       <button
-                        onClick={() =>
-                          handleViewReceipt(payment, selectedReceipt?.loan)
-                        }
+                        onClick={() => handleViewReceipt(payment)}
                         className="text-blue-400 hover:text-blue-300 transition-colors text-xs underline"
                       >
                         View Receipt
@@ -742,6 +901,23 @@ const PaymentHistory = ({ payments = {}, loan }) => {
           setSelectedReceipt(null);
         }}
       />
+
+      {/* ADD Delete Confirmation Modal */}
+      <ConfirmationModal
+        open={showDeleteConfirm}
+        onClose={() => {
+          setShowDeleteConfirm(false);
+          setPaymentToDelete(null);
+        }}
+        onConfirm={handleConfirmDelete}
+        title="Delete Payment Record"
+        message={`Are you sure you want to delete this payment of ₱${(
+          paymentToDelete?.amount || 0
+        ).toLocaleString()}? This will add the amount back to the remaining loan balance and cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Keep"
+        type="danger"
+      />
     </>
   );
 };
@@ -752,14 +928,16 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
   const [paymentAmount, setPaymentAmount] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState("");
-  const [error, setError] = useState(""); // ADD this line
+  const [error, setError] = useState("");
+  const [showPreview, setShowPreview] = useState(false); // NEW: Preview modal state
 
   useEffect(() => {
     if (open) {
       setPaymentAmount("");
       setSelectedFile(null);
       setPreview("");
-      setError(""); // ADD this line
+      setError("");
+      setShowPreview(false); // NEW: Reset preview state
     }
   }, [open]);
 
@@ -778,7 +956,7 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
         return;
       }
 
-      setError(""); // Clear any previous errors
+      setError("");
       setSelectedFile(file);
       const reader = new FileReader();
       reader.onload = () => setPreview(reader.result);
@@ -788,12 +966,12 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(""); // Clear previous errors
+    setError("");
 
     const amount = parseFloat(paymentAmount);
     const maxAmount = parseFloat(loan?.remainingAmount) || 0;
 
-    // Validation with nice error messages
+    // Validation
     if (!selectedFile) {
       setError("Please select a proof image");
       return;
@@ -815,14 +993,11 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
     try {
       const uploadResult = await cloudinaryService.uploadImage(selectedFile);
 
-      // Call onUpload and wait for it to complete
       await onUpload({
         amount: amount,
         proofUrl: uploadResult.secure_url,
         proofPublicId: uploadResult.public_id,
       });
-
-      // Don't call onClose here - let the parent component handle it
     } catch (error) {
       console.error("Upload failed:", error);
       setError(`Failed to upload proof: ${error.message}`);
@@ -834,105 +1009,135 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-200">
-      <div className="bg-slate-800/95 backdrop-blur-xl border-t border-slate-600/50 sm:border sm:border-slate-600/50 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-4 duration-300">
-        <div className="flex items-center justify-between p-6 border-b border-slate-600/30">
-          <h2 className="text-xl font-bold text-white">
-            Upload Proof of Payment
-          </h2>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 rounded-full bg-slate-700/50 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all duration-200"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form className="p-6 space-y-5">
-          {/* ADD ErrorMessage component here */}
-          <ErrorMessage error={error} onClose={() => setError("")} />
-
-          {/* Rest of the form remains the same */}
-          <div>
-            <label className="block text-slate-300 text-sm font-medium mb-2">
-              Payment Amount (Max: ₱
-              {(loan?.remainingAmount || 0).toLocaleString()})
-            </label>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
-                ₱
-              </span>
-              <input
-                type="number"
-                value={paymentAmount}
-                onChange={(e) => {
-                  setPaymentAmount(e.target.value);
-                  if (error) setError(""); // Clear error when user types
-                }}
-                className="w-full pl-8 pr-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
-                placeholder="0.00"
-                min="0"
-                max={loan?.remainingAmount || 0}
-                step="0.01"
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-slate-300 text-sm font-medium mb-2">
-              Upload Proof
-            </label>
-            <div className="border-2 border-dashed border-slate-600/50 rounded-xl p-6 text-center">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileSelect}
-                className="hidden"
-                id="proof-upload"
-                required
-              />
-              <label htmlFor="proof-upload" className="cursor-pointer">
-                {preview ? (
-                  <img
-                    src={preview}
-                    alt="Preview"
-                    className="w-32 h-32 object-cover rounded-lg mx-auto mb-3"
-                  />
-                ) : (
-                  <>
-                    <Camera className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                    <p className="text-slate-400 text-sm">
-                      Click to select image
-                    </p>
-                  </>
-                )}
-              </label>
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <Button variant="ghost" onClick={onClose} className="flex-1">
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSubmit} // CHANGE from type="submit" to onClick
-              disabled={uploading || !selectedFile || !paymentAmount}
-              className="flex-1"
+    <>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-200">
+        <div className="bg-slate-800/95 backdrop-blur-xl border-t border-slate-600/50 sm:border sm:border-slate-600/50 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center justify-between p-6 border-b border-slate-600/30">
+            <h2 className="text-xl font-bold text-white">
+              Upload Proof of Payment
+            </h2>
+            <button
+              onClick={onClose}
+              className="w-10 h-10 rounded-full bg-slate-700/50 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all duration-200"
             >
-              {uploading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
-                  Uploading...
-                </>
-              ) : (
-                "Upload Proof"
-              )}
-            </Button>
+              <X className="w-5 h-5" />
+            </button>
           </div>
-        </form>
+
+          <form className="p-6 space-y-5">
+            <ErrorMessage error={error} onClose={() => setError("")} />
+
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-2">
+                Payment Amount (Max: ₱
+                {(loan?.remainingAmount || 0).toLocaleString()})
+              </label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
+                  ₱
+                </span>
+                <input
+                  type="number"
+                  value={paymentAmount}
+                  onChange={(e) => {
+                    setPaymentAmount(e.target.value);
+                    if (error) setError("");
+                  }}
+                  className="w-full pl-8 pr-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
+                  placeholder="0.00"
+                  min="0"
+                  max={loan?.remainingAmount || 0}
+                  step="0.01"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-2">
+                Upload Proof
+              </label>
+              <div className="border-2 border-dashed border-slate-600/50 rounded-xl p-6 text-center">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  id="proof-upload"
+                  required
+                />
+                <label htmlFor="proof-upload" className="cursor-pointer">
+                  {preview ? (
+                    <div className="relative">
+                      <img
+                        src={preview}
+                        alt="Preview"
+                        className="w-32 h-32 object-cover rounded-lg mx-auto mb-3"
+                      />
+                      {/* NEW: Preview button */}
+                      <button
+                        type="button"
+                        onClick={() => setShowPreview(true)}
+                        className="absolute top-2 right-2 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-white transition-all duration-200"
+                        title="Preview image"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <Camera className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+                      <p className="text-slate-400 text-sm">
+                        Click to select image
+                      </p>
+                    </>
+                  )}
+                </label>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="ghost" onClick={onClose} className="flex-1">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={uploading || !selectedFile || !paymentAmount}
+                className="flex-1"
+              >
+                {uploading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                    Uploading...
+                  </>
+                ) : (
+                  "Upload Proof"
+                )}
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+
+      {/* NEW: Image Preview Modal */}
+      {showPreview && preview && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[60] animate-in fade-in duration-200">
+          <div className="relative max-w-4xl max-h-[90vh] m-4">
+            <img
+              src={preview}
+              alt="Preview"
+              className="max-w-full max-h-full object-contain rounded-lg"
+            />
+            <button
+              onClick={() => setShowPreview(false)}
+              className="absolute top-4 right-4 w-10 h-10 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-white transition-all duration-200"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
@@ -1184,7 +1389,6 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
 };
 
 // Receipt View Modal Component
-// Receipt View Modal Component - REPLACE the existing ReceiptViewModal component
 const ReceiptViewModal = ({ payment, loan, open, onClose }) => {
   if (!open || !payment) return null;
 
@@ -1207,112 +1411,142 @@ const ReceiptViewModal = ({ payment, loan, open, onClose }) => {
   const { date, time } = formatDateTime(payment.timestamp);
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] animate-in fade-in duration-200 pt-5 pb-5 px-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl animate-in slide-in-from-bottom-4 duration-300 flex flex-col max-h-full mx-auto overflow-hidden">
-        {/* Receipt Header */}
-        <div className="bg-slate-800 text-white p-4 text-center rounded-t-2xl flex-shrink-0">
-          <h2 className="text-lg font-bold mb-1">Payment Receipt</h2>
-          <p className="text-slate-300 text-sm">Personal Transaction</p>
-          <div className="mt-2 text-xs text-slate-400 font-mono">
-            #{payment.receiptId}
-          </div>
-        </div>
-
-        {/* Receipt Body - Scrollable */}
-        <div className="p-4 bg-white text-slate-800 space-y-3 overflow-y-auto flex-1">
-          {/* Amount */}
-          <div className="text-center border-b border-slate-200 pb-3">
-            <p className="text-slate-600 text-sm mb-1">Amount Paid</p>
-            <p className="text-2xl font-bold text-slate-800">
-              ₱{payment.amount.toLocaleString()}
-            </p>
+    <>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] animate-in fade-in duration-200 pt-5 pb-5 px-4">
+        <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl animate-in slide-in-from-bottom-4 duration-300 flex flex-col max-h-full mx-auto overflow-hidden">
+          {/* Receipt Header */}
+          <div className="bg-slate-800 text-white p-4 text-center rounded-t-2xl flex-shrink-0 relative">
+            <h2 className="text-lg font-bold mb-1">Payment Receipt</h2>
+            <p className="text-slate-300 text-sm">Personal Transaction</p>
+            <div className="mt-2 text-xs text-slate-400 font-mono">
+              #{payment.receiptId}
+            </div>
           </div>
 
-          {/* Transaction Details */}
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-slate-600">Date:</span>
-              <span className="font-medium text-right">{date}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-600">Time:</span>
-              <span className="font-medium">{time}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-600">Method:</span>
-              <span className="font-medium capitalize">
-                {payment.paymentMethod?.replace("_", " ") || "Cash"}
-              </span>
-            </div>
-            {payment.location && (
-              <div className="flex justify-between items-start">
-                <span className="text-slate-600 flex-shrink-0">Location:</span>
-                <span className="font-medium text-right ml-2 break-words">
-                  {payment.location}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Parties */}
-          {loan && (
-            <div className="border-t border-slate-200 pt-3 space-y-2 text-sm">
-              <div className="flex justify-between items-start">
-                <span className="text-slate-600 flex-shrink-0">
-                  {loan.type === "lent" ? "Borrower:" : "Lender:"}
-                </span>
-                <span className="font-medium text-right ml-2 break-words">
-                  {loan.personName}
-                </span>
-              </div>
-              {payment.witnessName && (
-                <div className="flex justify-between items-start">
-                  <span className="text-slate-600 flex-shrink-0">Witness:</span>
-                  <span className="font-medium text-right ml-2 break-words">
-                    {payment.witnessName}
-                  </span>
-                </div>
-              )}
-              {payment.witnessContact && (
-                <div className="flex justify-between items-start">
-                  <span className="text-slate-600 flex-shrink-0">Contact:</span>
-                  <span className="font-medium text-xs text-right ml-2 break-all">
-                    {payment.witnessContact}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Description */}
-          {payment.description && (
-            <div className="border-t border-slate-200 pt-3">
-              <p className="text-slate-600 text-sm mb-2">Notes:</p>
-              <p className="text-sm bg-slate-50 rounded-lg p-3 break-words">
-                {payment.description}
+          {/* Receipt Body - Scrollable */}
+          <div className="p-4 bg-white text-slate-800 space-y-3 overflow-y-auto flex-1">
+            {/* Amount */}
+            <div className="text-center border-b border-slate-200 pb-3">
+              <p className="text-slate-600 text-sm mb-1">Amount Paid</p>
+              <p className="text-2xl font-bold text-slate-800">
+                ₱{payment.amount.toLocaleString()}
               </p>
             </div>
-          )}
 
-          {/* Footer Note */}
-          <div className="border-t border-slate-200 pt-3 text-center">
-            <p className="text-xs text-slate-500">
-              Personal Receipt - Keep for your records
-            </p>
+            {/* Transaction Details */}
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Date:</span>
+                <span className="font-medium text-right">{date}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Time:</span>
+                <span className="font-medium">{time}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Method:</span>
+                <span className="font-medium capitalize">
+                  {payment.paymentMethod?.replace("_", " ") || "Cash"}
+                </span>
+              </div>
+              {payment.location && (
+                <div className="flex justify-between items-start">
+                  <span className="text-slate-600 flex-shrink-0">
+                    Location:
+                  </span>
+                  <span className="font-medium text-right ml-2 break-words">
+                    {payment.location}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Parties */}
+            {loan && (
+              <div className="border-t border-slate-200 pt-3 space-y-2 text-sm">
+                <div className="flex justify-between items-start">
+                  <span className="text-slate-600 flex-shrink-0">
+                    {loan.type === "lent" ? "Borrower:" : "Lender:"}
+                  </span>
+                  <span className="font-medium text-right ml-2 break-words">
+                    {loan.personName}
+                  </span>
+                </div>
+                {payment.witnessName && (
+                  <div className="flex justify-between items-start">
+                    <span className="text-slate-600 flex-shrink-0">
+                      Witness:
+                    </span>
+                    <span className="font-medium text-right ml-2 break-words">
+                      {payment.witnessName}
+                    </span>
+                  </div>
+                )}
+                {payment.witnessContact && (
+                  <div className="flex justify-between items-start">
+                    <span className="text-slate-600 flex-shrink-0">
+                      Contact:
+                    </span>
+                    <span className="font-medium text-xs text-right ml-2 break-all">
+                      {payment.witnessContact}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Description */}
+            {payment.description && (
+              <div className="border-t border-slate-200 pt-3">
+                <p className="text-slate-600 text-sm mb-2">Notes:</p>
+                <p className="text-sm bg-slate-50 rounded-lg p-3 break-words">
+                  {payment.description}
+                </p>
+              </div>
+            )}
+
+            {/* NEW: Proof image for uploaded receipts */}
+            {payment.proofUrl && (
+              <div className="border-t border-slate-200 pt-3">
+                <p className="text-slate-600 text-sm mb-2">Proof Image:</p>
+                <a
+                  href={payment.proofUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full"
+                >
+                  <img
+                    src={payment.proofUrl}
+                    alt="Payment proof"
+                    className="w-full h-32 object-cover rounded-lg border border-slate-200 hover:opacity-90 transition-opacity"
+                  />
+                </a>
+                <p className="text-xs text-slate-500 text-center mt-1">
+                  Click to view full size
+                </p>
+              </div>
+            )}
+
+            {/* Footer Note */}
+            <div className="border-t border-slate-200 pt-3 text-center">
+              <p className="text-xs text-slate-500">
+                Personal Receipt - Keep for your records
+              </p>
+            </div>
+          </div>
+
+          {/* Close Button - Fixed at bottom */}
+          <div className="p-4 bg-slate-50 border-t rounded-b-2xl flex-shrink-0">
+            <button
+              onClick={onClose}
+              className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-colors font-medium active:scale-95 transform"
+            >
+              Close Receipt
+            </button>
           </div>
         </div>
-
-        {/* Close Button - Fixed at bottom */}
-        <div className="p-4 bg-slate-50 border-t rounded-b-2xl flex-shrink-0">
-          <button
-            onClick={onClose}
-            className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-colors font-medium active:scale-95 transform"
-          >
-            Close Receipt
-          </button>
-        </div>
       </div>
-    </div>
+    </>
   );
 };
 
@@ -1612,11 +1846,18 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
   );
 };
 
-const getDueDateStatus = (dueDate) => {
-  if (!dueDate) return null;
+// Replace the getDueDateStatus function (around line 1450-1470)
+const getDueDateStatus = (loan) => {
+  // CHANGE: Accept full loan object instead of just dueDate
+  if (!loan?.dueDate || loan.status === "paid") return null;
+
+  // ADDITIONAL CHECK: Don't show due date status if remaining amount is 0
+  const remainingAmount =
+    parseFloat(loan.remainingAmount) || parseFloat(loan.amount) || 0;
+  if (remainingAmount === 0) return null;
 
   const today = new Date();
-  const due = new Date(dueDate);
+  const due = new Date(loan.dueDate);
   const diffTime = due.getTime() - today.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -1637,6 +1878,7 @@ const LoanList = ({
   onDelete,
   onUploadProof,
   onAddManualReceipt,
+  onDeletePayment, // ADD this line
 }) => {
   if (loans.length === 0) {
     return (
@@ -1664,7 +1906,7 @@ const LoanList = ({
           parseFloat(loan.remainingAmount) || originalAmount;
         const totalPaid = Math.max(0, originalAmount - remainingAmount);
 
-        const dueDateStatus = getDueDateStatus(loan.dueDate);
+        const dueDateStatus = getDueDateStatus(loan);
         const isDueSoon =
           dueDateStatus &&
           ["overdue", "due-soon"].includes(dueDateStatus.status);
@@ -1857,7 +2099,11 @@ const LoanList = ({
             {/* Collapsible Payment History */}
             {hasPayments && (
               <div className="mb-3">
-                <PaymentHistory payments={loan.payments} loan={loan} />
+                <PaymentHistory
+                  payments={loan.payments}
+                  loan={loan}
+                  onDeletePayment={onDeletePayment} // ADD this line
+                />
               </div>
             )}
 
@@ -2242,6 +2488,45 @@ const LoanTrackerApp = () => {
     }
   };
 
+  const handleDeletePayment = async (payment, loan) => {
+    try {
+      // If it's an uploaded proof with Cloudinary public ID, delete from Cloudinary first
+      if (payment.proofPublicId) {
+        try {
+          await cloudinaryService.deleteImage(payment.proofPublicId);
+          console.log("Image deleted from Cloudinary:", payment.proofPublicId);
+        } catch (cloudinaryError) {
+          console.warn(
+            "Failed to delete image from Cloudinary:",
+            cloudinaryError
+          );
+          // Continue with payment deletion even if Cloudinary deletion fails
+        }
+      }
+
+      // Delete the payment and get refund amount
+      const { refundAmount } = await loanService.deletePayment(
+        user.uid,
+        loan.id,
+        payment.id
+      );
+
+      // Update the loan with the refunded amount
+      await loanService.updateLoanAfterPaymentDeletion(
+        user.uid,
+        loan.id,
+        refundAmount
+      );
+
+      showNotification(
+        `Payment of ₱${refundAmount.toLocaleString()} deleted and refunded to loan balance`
+      );
+    } catch (error) {
+      console.error("Error deleting payment:", error);
+      showNotification("Error deleting payment: " + error.message, "error");
+    }
+  };
+
   const showNotification = (message, type = "success") => {
     console.log("Showing notification:", message, type); // ADD this line
     // Clear any existing notification first
@@ -2457,6 +2742,7 @@ const LoanTrackerApp = () => {
               onDelete={initiateDelete}
               onUploadProof={handleUploadProof}
               onAddManualReceipt={handleAddManualReceipt}
+              onDeletePayment={handleDeletePayment}
             />
           </div>
         )}
@@ -2821,6 +3107,7 @@ const FilterSearchBar = ({
   );
 };
 
+// Replace the DueDateWarning component (around line 2650-2750)
 const DueDateWarning = ({ loans }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -2833,7 +3120,14 @@ const DueDateWarning = ({ loans }) => {
     const warning = []; // Due in 1-3 days
 
     loans.forEach((loan) => {
-      if (loan.status !== "active" || !loan.dueDate) return;
+      // CHANGE: Only process loans that are active AND not paid
+      if (loan.status !== "active" || !loan.dueDate || loan.status === "paid")
+        return;
+
+      // ADDITIONAL CHECK: Skip if remaining amount is 0 (effectively paid)
+      const remainingAmount =
+        parseFloat(loan.remainingAmount) || parseFloat(loan.amount) || 0;
+      if (remainingAmount === 0) return;
 
       const dueDate = new Date(loan.dueDate);
       const diffTime = dueDate.getTime() - now.getTime();
