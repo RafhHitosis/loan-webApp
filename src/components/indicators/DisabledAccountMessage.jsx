@@ -289,8 +289,8 @@ const DisabledAccountMessage = ({ userEmail }) => {
               <p className="text-sm text-slate-400">
                 <strong className="text-slate-300">Need help?</strong>
                 <br />
-                If you believe this is an error, please contact our support team
-                with your account details.
+                If you believe this is an error, please contact the admin using
+                the details above.
               </p>
             </div>
           </div>
