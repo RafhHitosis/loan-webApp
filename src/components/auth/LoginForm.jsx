@@ -4,6 +4,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import Input from "../common/Input";
 import Button from "../common/Button";
 import ErrorMessage from "./../indicators/ErrorMessage";
+import DisabledAccountMessage from "./../indicators/DisabledAccountMessage";
 
 const LoginForm = () => {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -11,7 +12,21 @@ const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, isAccountDisabled, clearDisabledStatus } = useAuth();
+
+  // Show disabled account message if account is disabled
+  if (isAccountDisabled) {
+    return (
+      <DisabledAccountMessage
+        onBackToLogin={() => {
+          clearDisabledStatus();
+          setError("");
+          setFormData({ email: "", password: "" });
+        }}
+        userEmail={formData.email}
+      />
+    );
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -56,6 +71,13 @@ const LoginForm = () => {
         errorMessage = "Password is too weak";
       } else if (errorMessage.includes("invalid-email")) {
         errorMessage = "Invalid email address";
+      } else if (
+        errorMessage.includes("user-disabled") ||
+        err.code === "auth/user-disabled"
+      ) {
+        // Don't show error here, let the disabled account message handle it
+        setLoading(false);
+        return;
       }
       setError(errorMessage);
     } finally {

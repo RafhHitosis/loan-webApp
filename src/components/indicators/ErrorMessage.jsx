@@ -1,3 +1,5 @@
+import { AlertTriangle } from "lucide-react";
+
 const ErrorMessage = ({ error, onClose }) => {
   if (!error) return null;
 
