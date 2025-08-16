@@ -7,9 +7,11 @@ import {
   X,
   Send,
   CheckCircle,
+  LogOut,
 } from "lucide-react";
 import { ref, push } from "firebase/database";
-import { database } from "./../../lib/firebase"; // Adjust path as needed
+import { database } from "./../../lib/firebase";
+import { useAuth } from "./../../contexts/AuthContext";
 
 const AdminContactPopup = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
@@ -35,7 +37,7 @@ const AdminContactPopup = ({ isOpen, onClose }) => {
             </div>
             <div>
               <p className="text-sm text-slate-400">Email</p>
-              <p className="text-white font-medium">admin@yourapp.com</p>
+              <p className="text-white font-medium">rafhhitosis@gmail.com</p>
             </div>
           </div>
 
@@ -46,14 +48,14 @@ const AdminContactPopup = ({ isOpen, onClose }) => {
             </div>
             <div>
               <p className="text-sm text-slate-400">Phone</p>
-              <p className="text-white font-medium">+1 (555) 123-4567</p>
+              <p className="text-white font-medium">+63 916 574 7801</p>
             </div>
           </div>
         </div>
 
         <div className="mt-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700/50">
           <p className="text-sm text-slate-400">
-            <strong className="text-slate-300">Business Hours:</strong>
+            <strong className="text-slate-300">Available Hours:</strong>
             <br />
             Monday - Friday: 9:00 AM - 6:00 PM
             <br />
@@ -73,7 +75,10 @@ const AppealForm = ({ isOpen, onClose, userEmail, onSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!appealText.trim()) return;
+    if (!appealText.trim()) {
+      alert("Please enter your appeal message.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -84,12 +89,17 @@ const AppealForm = ({ isOpen, onClose, userEmail, onSuccess }) => {
         timestamp: Date.now(),
         status: "pending",
         createdAt: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        submittedFrom: "disabled-account-page",
       });
 
+      setAppealText("");
       onSuccess();
     } catch (error) {
       console.error("Error submitting appeal:", error);
-      alert("Failed to submit appeal. Please try again.");
+      alert(
+        "Failed to submit appeal. Please try again or contact admin directly."
+      );
     } finally {
       setLoading(false);
     }
@@ -196,14 +206,23 @@ const AppealSuccess = ({ isOpen, onClose }) => {
   );
 };
 
-const DisabledAccountMessage = ({ onBackToLogin, userEmail }) => {
+const DisabledAccountMessage = ({ userEmail }) => {
   const [showContactPopup, setShowContactPopup] = useState(false);
   const [showAppealForm, setShowAppealForm] = useState(false);
   const [showAppealSuccess, setShowAppealSuccess] = useState(false);
+  const { signOut } = useAuth();
 
   const handleAppealSuccess = () => {
     setShowAppealForm(false);
     setShowAppealSuccess(true);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
   };
 
   return (
@@ -222,11 +241,18 @@ const DisabledAccountMessage = ({ onBackToLogin, userEmail }) => {
             </h1>
 
             {/* Description */}
-            <p className="text-slate-400 mb-8 leading-relaxed">
-              Your account has been temporarily disabled by an administrator.
-              This may be due to a violation of our terms of service or
-              suspicious activity.
-            </p>
+            <div className="text-slate-400 mb-8 leading-relaxed space-y-2">
+              <p>
+                Your account has been temporarily disabled by an administrator.
+              </p>
+              <p>
+                This may be due to a violation of our terms of service or
+                suspicious activity.
+              </p>
+              <p className="text-sm bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
+                <strong className="text-slate-300">Account:</strong> {userEmail}
+              </p>
+            </div>
 
             {/* Action Buttons */}
             <div className="space-y-4">
@@ -248,12 +274,13 @@ const DisabledAccountMessage = ({ onBackToLogin, userEmail }) => {
                 Submit Appeal
               </button>
 
-              {/* Back to Login */}
+              {/* Sign Out Button */}
               <button
-                onClick={onBackToLogin}
-                className="w-full px-6 py-4 bg-slate-500/20 hover:bg-slate-500/30 border border-slate-500/30 text-slate-400 hover:text-slate-300 rounded-xl transition-all duration-200"
+                onClick={handleSignOut}
+                className="w-full px-6 py-4 bg-slate-500/20 hover:bg-slate-500/30 border border-slate-500/30 text-slate-400 hover:text-slate-300 rounded-xl transition-all duration-200 flex items-center justify-center gap-3"
               >
-                Back to Login
+                <LogOut className="w-4 h-4" />
+                Sign Out
               </button>
             </div>
 

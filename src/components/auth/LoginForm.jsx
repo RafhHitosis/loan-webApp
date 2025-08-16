@@ -4,7 +4,6 @@ import { useAuth } from "../../contexts/AuthContext";
 import Input from "../common/Input";
 import Button from "../common/Button";
 import ErrorMessage from "./../indicators/ErrorMessage";
-import DisabledAccountMessage from "./../indicators/DisabledAccountMessage";
 
 const LoginForm = () => {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -12,21 +11,7 @@ const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp, isAccountDisabled, clearDisabledStatus } = useAuth();
-
-  // Show disabled account message if account is disabled
-  if (isAccountDisabled) {
-    return (
-      <DisabledAccountMessage
-        onBackToLogin={() => {
-          clearDisabledStatus();
-          setError("");
-          setFormData({ email: "", password: "" });
-        }}
-        userEmail={formData.email}
-      />
-    );
-  }
+  const { signIn, signUp } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -58,12 +43,19 @@ const LoginForm = () => {
       } else {
         await signIn(formData.email, formData.password);
       }
+      // Don't reset form data here - let the auth state change handle navigation
     } catch (err) {
+      console.error("Authentication error:", err);
+
       // Friendly error messages
       let errorMessage = err.message;
+
       if (errorMessage.includes("user-not-found")) {
         errorMessage = "No account found with this email";
-      } else if (errorMessage.includes("wrong-password")) {
+      } else if (
+        errorMessage.includes("wrong-password") ||
+        errorMessage.includes("invalid-credential")
+      ) {
         errorMessage = "Incorrect password";
       } else if (errorMessage.includes("email-already-in-use")) {
         errorMessage = "An account with this email already exists";
@@ -71,14 +63,16 @@ const LoginForm = () => {
         errorMessage = "Password is too weak";
       } else if (errorMessage.includes("invalid-email")) {
         errorMessage = "Invalid email address";
+      } else if (errorMessage.includes("too-many-requests")) {
+        errorMessage = "Too many failed attempts. Please try again later.";
       } else if (
         errorMessage.includes("user-disabled") ||
-        err.code === "auth/user-disabled"
+        errorMessage.includes("disabled by an administrator")
       ) {
-        // Don't show error here, let the disabled account message handle it
-        setLoading(false);
-        return;
+        errorMessage =
+          "Your account has been disabled. Please contact support.";
       }
+
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -164,6 +158,7 @@ const LoginForm = () => {
             onClick={() => {
               setIsSignUp(!isSignUp);
               setError(""); // Clear errors when switching
+              setFormData({ email: "", password: "" }); // Clear form
             }}
             className="text-slate-400 hover:text-emerald-400 transition-colors duration-200"
           >
