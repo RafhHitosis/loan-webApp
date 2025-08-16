@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from "react";
+import { X } from "lucide-react";
+import ErrorMessage from "./../indicators/ErrorMessage";
+import Button from "./../common/Button";
 
 const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
   const [formData, setFormData] = useState({
