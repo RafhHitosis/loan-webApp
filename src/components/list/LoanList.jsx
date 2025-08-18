@@ -223,8 +223,8 @@ const LoanList = ({
                       day: "numeric",
                       year: "numeric",
                     })}
-                    {dueDateStatus?.isOverdue && " ⚠️"}
-                    {dueDateStatus?.status === "due-today" && " (TODAY)"}
+                    {dueDateStatus?.isOverdue}
+                    {dueDateStatus?.status === "due-today"}
                   </p>
                 )}
               </div>

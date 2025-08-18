@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import LoginForm from "./auth/LoginForm";
 import { useAuth } from "./../contexts/AuthContext";
 import Dashboard from "../components/Dashboard/Dashboard";
@@ -72,6 +72,24 @@ const LoanTrackerApp = () => {
     currentView,
     setCurrentView
   );
+
+  // Auto-scroll to bottom on app load (mobile view)
+  useEffect(() => {
+    if (user) {
+      // Check if it's mobile view (you can adjust this breakpoint as needed)
+      const isMobile = window.innerWidth <= 768;
+
+      if (isMobile) {
+        // Small delay to ensure the DOM is fully rendered
+        setTimeout(() => {
+          window.scrollTo({
+            top: document.body.scrollHeight,
+            behavior: "smooth",
+          });
+        }, 300);
+      }
+    }
+  }, [user]); // Trigger when user is loaded (app is ready)
 
   // Event handlers
   const handleEditLoan = (loan) => {
