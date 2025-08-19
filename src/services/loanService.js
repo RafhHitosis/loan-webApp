@@ -18,7 +18,12 @@ const loanService = {
     return await push(loansRef, {
       ...loanData,
       remainingAmount: loanData.amount,
-      payments: {}, // Initialize as empty object, not array
+      payments: {},
+      monthlyBreakdown: loanData.monthlyBreakdown || null, // ADD this
+      interestRate: loanData.interestRate || 0, // ADD this
+      totalInterest: loanData.totalInterest || 0, // ADD this
+      totalAmountWithInterest:
+        loanData.totalAmountWithInterest || loanData.amount, // ADD this
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -67,6 +72,14 @@ const loanService = {
         updatedAt: Date.now(),
         // Ensure payments are preserved
         payments: currentLoan.payments || {},
+        monthlyBreakdown:
+          loanData.monthlyBreakdown || currentLoan.monthlyBreakdown || null,
+        interestRate: loanData.interestRate || currentLoan.interestRate || 0,
+        totalInterest: loanData.totalInterest || currentLoan.totalInterest || 0,
+        totalAmountWithInterest:
+          loanData.totalAmountWithInterest ||
+          currentLoan.totalAmountWithInterest ||
+          newAmount,
       };
 
       return await set(loanRef, updatedLoan);

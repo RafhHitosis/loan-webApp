@@ -3,6 +3,7 @@ import ErrorMessage from "../indicators/ErrorMessage";
 import Button from "../common/Button";
 import ConfirmationModal from "../modal/ConfirmationModal";
 import { X } from "lucide-react";
+import { calculateMonthlyBreakdown } from "../../utils/loanCalculations";
 
 const LoanForm = ({ loan, open, onClose, onSave }) => {
   const [formData, setFormData] = useState({
@@ -18,6 +19,8 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false); // ADD this
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false); // ADD this
   const [originalData, setOriginalData] = useState(null); // ADD this
+
+  const [interestRate, setInterestRate] = useState(0.05); // 5% default
 
   useEffect(() => {
     if (loan) {
@@ -81,12 +84,20 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
       return;
     }
 
+    const monthlyBreakdown = formData.dueDate
+      ? calculateMonthlyBreakdown(amount, formData.dueDate, interestRate)
+      : null;
+
     onSave({
       ...formData,
       amount: amount,
       id: loan?.id || null,
+      interestRate: interestRate,
+      monthlyBreakdown: monthlyBreakdown?.monthlyBreakdown || null,
+      totalInterest: monthlyBreakdown?.totalInterest || 0,
+      totalAmountWithInterest: monthlyBreakdown?.totalAmount || amount,
     });
-    setHasUnsavedChanges(false); // Reset after save
+    setHasUnsavedChanges(false);
   };
 
   const updateFormData = (field, value) => {
@@ -225,6 +236,211 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                 className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
               />
             </div>
+
+            {formData.dueDate && (
+              <div className="space-y-3">
+                <label className="block text-slate-300 text-sm font-medium">
+                  Monthly Interest Rate
+                </label>
+
+                {/* Quick Select Buttons - Mobile Friendly */}
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {[
+                    {
+                      rate: 0,
+                      label: "0%",
+                      desc: "No Interest",
+                      color: "bg-blue-500",
+                    },
+                    {
+                      rate: 0.03,
+                      label: "3%",
+                      desc: "Low",
+                      color: "bg-emerald-500",
+                    },
+                    {
+                      rate: 0.05,
+                      label: "5%",
+                      desc: "Standard",
+                      color: "bg-emerald-500",
+                    },
+                    {
+                      rate: 0.07,
+                      label: "7%",
+                      desc: "High",
+                      color: "bg-amber-500",
+                    },
+                  ].map((option) => (
+                    <button
+                      key={option.rate}
+                      type="button"
+                      onClick={() => setInterestRate(option.rate)}
+                      className={`p-3 rounded-xl text-center transition-all duration-200 ${
+                        interestRate === option.rate
+                          ? `${option.color} text-white shadow-lg`
+                          : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
+                      }`}
+                    >
+                      <div className="font-semibold text-sm">
+                        {option.label}
+                      </div>
+                      <div className="text-xs opacity-75">{option.desc}</div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Custom Rate Input - Compact Mobile Design */}
+                <div className="bg-slate-700/20 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-slate-300 text-sm font-medium">
+                      Custom Rate
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={
+                          interestRate === 0
+                            ? "0"
+                            : (interestRate * 100).toFixed(1)
+                        }
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          setInterestRate(value / 100);
+                        }}
+                        className="w-16 px-2 py-1 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white text-sm text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        step="0.1"
+                        min="0"
+                        max="20"
+                      />
+                      <span className="text-slate-400 text-sm">%</span>
+                    </div>
+                  </div>
+
+                  {/* Range Slider - Updated for Zero */}
+                  <input
+                    type="range"
+                    min="0"
+                    max="20"
+                    step="0.5"
+                    value={interestRate * 100}
+                    onChange={(e) =>
+                      setInterestRate(parseFloat(e.target.value) / 100)
+                    }
+                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, ${
+                        interestRate === 0 ? "#3b82f6" : "#10b981"
+                      } 0%, ${interestRate === 0 ? "#3b82f6" : "#10b981"} ${
+                        interestRate * 100 * 5
+                      }%, #475569 ${interestRate * 100 * 5}%, #475569 100%)`,
+                    }}
+                  />
+                  <div className="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>0%</span>
+                    <span>20%</span>
+                  </div>
+                </div>
+
+                {/* Payment Preview - Mobile Optimized Card */}
+                {formData.amount && formData.dueDate && (
+                  <div
+                    className={`border rounded-xl p-4 ${
+                      interestRate === 0
+                        ? "bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-blue-500/20"
+                        : "bg-gradient-to-r from-emerald-500/10 to-blue-500/10 border-emerald-500/20"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      <div
+                        className={`w-2 h-2 rounded-full animate-pulse ${
+                          interestRate === 0 ? "bg-blue-400" : "bg-emerald-400"
+                        }`}
+                      ></div>
+                      <span className="text-slate-200 font-medium text-sm">
+                        {interestRate === 0
+                          ? "Payment Plan (No Interest)"
+                          : "Payment Preview"}
+                      </span>
+                    </div>
+
+                    {(() => {
+                      const preview = calculateMonthlyBreakdown(
+                        parseFloat(formData.amount) || 0,
+                        formData.dueDate,
+                        interestRate
+                      );
+                      return preview ? (
+                        <div className="space-y-2">
+                          {/* Monthly Payment - Different styling for no interest */}
+                          <div
+                            className={`rounded-lg p-3 ${
+                              interestRate === 0
+                                ? "bg-blue-500/20"
+                                : "bg-slate-700/30"
+                            }`}
+                          >
+                            <div className="text-center">
+                              <div className="text-slate-400 text-xs mb-1">
+                                {interestRate === 0
+                                  ? "Monthly Payment (Equal Splits)"
+                                  : "Monthly Payment"}
+                              </div>
+                              <div
+                                className={`font-bold text-lg ${
+                                  interestRate === 0
+                                    ? "text-blue-400"
+                                    : "text-emerald-400"
+                                }`}
+                              >
+                                ₱{preview.monthlyPayment.toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Summary Grid */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-slate-700/20 rounded-lg p-2 text-center">
+                              <div className="text-slate-400 text-xs">
+                                Total Amount
+                              </div>
+                              <div className="text-white font-semibold text-sm">
+                                ₱{preview.totalAmount.toLocaleString()}
+                              </div>
+                            </div>
+                            <div className="bg-slate-700/20 rounded-lg p-2 text-center">
+                              <div className="text-slate-400 text-xs">
+                                {interestRate === 0
+                                  ? "Interest Saved"
+                                  : "Total Interest"}
+                              </div>
+                              <div
+                                className={`font-semibold text-sm ${
+                                  interestRate === 0
+                                    ? "text-blue-400"
+                                    : "text-amber-400"
+                                }`}
+                              >
+                                {interestRate === 0
+                                  ? "₱0"
+                                  : `₱${preview.totalInterest.toLocaleString()}`}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Number of Payments with context */}
+                          <div className="text-center">
+                            <span className="text-slate-400 text-xs">
+                              {preview.monthlyBreakdown.length} monthly payments
+                              {interestRate === 0 ? " • Interest-free" : ""}
+                            </span>
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="block text-slate-300 text-sm font-medium mb-2">

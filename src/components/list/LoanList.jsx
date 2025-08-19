@@ -2,6 +2,7 @@ import getDueDateStatus from "../indicators/getDueDateStatus";
 import Card from "../common/Card";
 import PaymentHistory from "../payment/PaymentHistory";
 import { Edit3, Trash2, Check, Upload, FileImage } from "lucide-react";
+import MonthlyBreakdown from "../breakdown/MonthlyBreakdown";
 
 const LoanList = ({
   loans,
@@ -249,6 +250,12 @@ const LoanList = ({
                   loan={loan}
                   onDeletePayment={onDeletePayment} // ADD this line
                 />
+              </div>
+            )}
+
+            {loan.monthlyBreakdown && (
+              <div className="mb-3">
+                <MonthlyBreakdown loan={loan} />
               </div>
             )}
 
