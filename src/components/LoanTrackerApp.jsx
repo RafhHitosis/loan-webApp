@@ -146,6 +146,8 @@ const LoanTrackerApp = () => {
     const result = await handleSaveLoan(loanData);
     if (result.success) {
       handleLoanFormClose();
+      // After adding a loan when empty, navigate to loans list
+      setCurrentView("loans");
     }
   };
 
@@ -184,7 +186,15 @@ const LoanTrackerApp = () => {
 
       {/* Main Content */}
       <main className="px-4 py-6 pb-24">
-        {currentView === "dashboard" && <Dashboard loans={loans} />}
+        {currentView === "dashboard" && (
+          <Dashboard
+            loans={loans}
+            onAddLoan={() => {
+              setEditingLoan(null);
+              openLoanForm();
+            }}
+          />
+        )}
         {currentView === "loans" && (
           <div className="space-y-4">
             <FilterSearchBar

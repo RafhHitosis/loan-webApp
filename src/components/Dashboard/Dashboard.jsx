@@ -8,8 +8,13 @@ import {
   History,
 } from "lucide-react";
 import Card from "../common/Card";
+import Button from "../common/Button";
+import {
+  computeRemainingFromBreakdown,
+  normalizeAmount,
+} from "../../utils/loanCalculations";
 
-const Dashboard = ({ loans }) => {
+const Dashboard = ({ loans, onAddLoan }) => {
   const calculateSummary = () => {
     if (!Array.isArray(loans)) {
       return {
@@ -44,19 +49,37 @@ const Dashboard = ({ loans }) => {
     );
 
     const totalLentRemaining = lentLoans.reduce((sum, loan) => {
-      const remaining =
-        parseFloat(loan?.remainingAmount) || parseFloat(loan?.amount) || 0;
+      const recomputed = computeRemainingFromBreakdown(
+        loan?.monthlyBreakdown,
+        loan?.payments
+      );
+      const remaining = normalizeAmount(
+        recomputed !== null
+          ? recomputed
+          : parseFloat(loan?.remainingAmount) || parseFloat(loan?.amount) || 0
+      );
       return sum + remaining;
     }, 0);
 
     const totalBorrowedRemaining = borrowedLoans.reduce((sum, loan) => {
-      const remaining =
-        parseFloat(loan?.remainingAmount) || parseFloat(loan?.amount) || 0;
+      const recomputed = computeRemainingFromBreakdown(
+        loan?.monthlyBreakdown,
+        loan?.payments
+      );
+      const remaining = normalizeAmount(
+        recomputed !== null
+          ? recomputed
+          : parseFloat(loan?.remainingAmount) || parseFloat(loan?.amount) || 0
+      );
       return sum + remaining;
     }, 0);
 
-    const totalLentPaid = totalLentOriginal - totalLentRemaining;
-    const totalBorrowedPaid = totalBorrowedOriginal - totalBorrowedRemaining;
+    const totalLentPaid = normalizeAmount(
+      totalLentOriginal - totalLentRemaining
+    );
+    const totalBorrowedPaid = normalizeAmount(
+      totalBorrowedOriginal - totalBorrowedRemaining
+    );
 
     // Count loans by status
     const activeLentCount = lentLoans.filter(
@@ -72,10 +95,22 @@ const Dashboard = ({ loans }) => {
       (loan) => loan?.status === "paid"
     ).length;
 
-    // Calculate completion rate
+    // Calculate completion rate based on recomputed remaining (status-agnostic)
     const totalLoans = loans.length;
-    const paidLoans = loans.filter((loan) => loan?.status === "paid").length;
-    const completionRate = totalLoans > 0 ? (paidLoans / totalLoans) * 100 : 0;
+    const completedCount = loans.reduce((count, loan) => {
+      const r = computeRemainingFromBreakdown(
+        loan?.monthlyBreakdown,
+        loan?.payments
+      );
+      const remaining = normalizeAmount(
+        r !== null
+          ? r
+          : parseFloat(loan?.remainingAmount) || parseFloat(loan?.amount) || 0
+      );
+      return count + (remaining === 0 ? 1 : 0);
+    }, 0);
+    const completionRate =
+      totalLoans > 0 ? (completedCount / totalLoans) * 100 : 0;
 
     // Get recent activity (recent payments)
     const recentActivity = loans
@@ -106,8 +141,15 @@ const Dashboard = ({ loans }) => {
     loans.forEach((loan) => {
       if (loan.status !== "active" || !loan.dueDate) return;
 
-      const remainingAmount =
-        parseFloat(loan.remainingAmount) || parseFloat(loan.amount) || 0;
+      const recomputed = computeRemainingFromBreakdown(
+        loan?.monthlyBreakdown,
+        loan?.payments
+      );
+      const remainingAmount = normalizeAmount(
+        recomputed !== null
+          ? recomputed
+          : parseFloat(loan?.remainingAmount) || parseFloat(loan?.amount) || 0
+      );
       if (remainingAmount === 0) return;
 
       const dueDate = new Date(loan.dueDate);
@@ -136,6 +178,8 @@ const Dashboard = ({ loans }) => {
       overdueLoans: overdueLoans.sort((a, b) => b.daysOverdue - a.daysOverdue),
       dueSoonLoans: dueSoonLoans.sort((a, b) => a.daysLeft - b.daysLeft),
       completionRate,
+      completedCount,
+      pendingCount: totalLoans - completedCount,
     };
   };
 
@@ -202,34 +246,17 @@ const Dashboard = ({ loans }) => {
     </Card>
   );
 
-  // Show empty state if no loans
   if (loans.length === 0) {
     return (
       <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-        <div className="text-center py-12">
-          <div className="w-20 h-20 bg-slate-700/50 rounded-3xl flex items-center justify-center mx-auto mb-6">
-            <DollarSign className="w-10 h-10 text-slate-400" />
+        <div className="text-center py-16">
+          <div className="w-20 h-20 bg-slate-700/50 rounded-3xl flex items-center justify-center mx-auto mb-4">
+            <span className="text-5xl text-slate-300 font-bold">₱</span>
           </div>
-          <h3 className="text-xl font-semibold text-white mb-3">
-            Welcome to Loan Tracker!
-          </h3>
-          <p className="text-slate-400 mb-6 max-w-sm mx-auto">
-            Start by adding your first loan to track money you've lent or
-            borrowed
-          </p>
-          <div className="space-y-3">
-            <div className="flex items-center justify-center gap-2 text-slate-500 text-sm">
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
-              <span>Track money you've lent</span>
-            </div>
-            <div className="flex items-center justify-center gap-2 text-slate-500 text-sm">
-              <TrendingDown className="w-4 h-4 text-red-400" />
-              <span>Track money you've borrowed</span>
-            </div>
-            <div className="flex items-center justify-center gap-2 text-slate-500 text-sm">
-              <FileImage className="w-4 h-4 text-blue-400" />
-              <span>Upload payment proofs</span>
-            </div>
+          <h3 className="text-xl font-semibold text-white mb-2">No loans yet</h3>
+          <p className="text-slate-400 text-sm mb-6">Add your first loan to start</p>
+          <div className="flex items-center justify-center">
+            <Button onClick={onAddLoan} className="px-5">+ Add Loan</Button>
           </div>
         </div>
       </div>
@@ -340,12 +367,8 @@ const Dashboard = ({ loans }) => {
               ></div>
             </div>
             <div className="flex justify-between text-xs text-slate-400">
-              <span>
-                {loans.filter((l) => l.status === "paid").length} completed
-              </span>
-              <span>
-                {loans.filter((l) => l.status === "active").length} pending
-              </span>
+              <span>{summary.completedCount} completed</span>
+              <span>{summary.pendingCount} pending</span>
             </div>
           </Card>
         )}

@@ -4,6 +4,7 @@ import ErrorMessage from "./../indicators/ErrorMessage";
 import Button from "./../common/Button";
 
 const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     amount: "",
     date: new Date().toISOString().split("T")[0],
@@ -34,6 +35,11 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Prevent double submission
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
     setError("");
 
     const amount = parseFloat(formData.amount);
@@ -42,6 +48,7 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
     // Validation
     if (!amount || amount <= 0) {
       setError("Please enter a valid payment amount");
+      setIsSubmitting(false);
       return;
     }
 
@@ -49,17 +56,18 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
       setError(
         `Payment amount cannot exceed remaining amount of ₱${maxAmount.toLocaleString()}`
       );
+      setIsSubmitting(false);
       return;
     }
 
     if (!formData.location.trim()) {
       setError("Please enter the location where payment was made");
+      setIsSubmitting(false);
       return;
     }
 
     try {
-      // Call onSave and wait for it to complete
-      await onSave({
+      const result = await onSave({
         ...formData,
         amount: amount,
         type: "manual",
@@ -67,10 +75,15 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
         timestamp: new Date(`${formData.date}T${formData.time}`).getTime(),
       });
 
-      // Don't call onClose here - let the parent component handle it
+      // Only close if save was successful
+      if (result && result.success) {
+        onClose();
+      }
     } catch (error) {
       console.error("Save failed:", error);
       setError(`Failed to save receipt: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -241,10 +254,19 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
           <Button variant="ghost" onClick={onClose} className="flex-1">
             Cancel
           </Button>
-          <Button onClick={handleSubmit} className="flex-1">
-            {" "}
-            {/* CHANGE from form submit to onClick */}
-            Save Receipt
+          <Button
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            className="flex-1"
+          >
+            {isSubmitting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                Saving...
+              </>
+            ) : (
+              "Save Receipt"
+            )}
           </Button>
         </div>
       </div>

@@ -53,7 +53,10 @@ const loanService = {
 
       // Calculate new remaining amount based on new loan amount
       const newAmount = parseFloat(loanData.amount) || 0;
-      const newRemainingAmount = Math.max(0, newAmount - totalPaid);
+      let newRemainingAmount = Math.max(0, newAmount - totalPaid);
+      // Normalize to 2 decimals and zero-out tiny residuals
+      newRemainingAmount = Math.round(newRemainingAmount * 100) / 100;
+      if (newRemainingAmount <= 0.01) newRemainingAmount = 0;
 
       // Determine new status
       let newStatus = loanData.status || currentLoan.status || "active";
@@ -124,18 +127,12 @@ const loanService = {
   },
 
   // NEW: Method to update loan after payment without losing data
-  updateLoanAfterPayment: async (
-    userId,
-    loanId,
-    newRemainingAmount,
-    newStatus
-  ) => {
+  updateLoanAfterPayment: async (userId, loanId, newRemainingAmount) => {
     if (!userId || !loanId) {
       throw new Error("User ID and Loan ID are required");
     }
 
     try {
-      // ADD validation to check if loan exists first
       const loanRef = ref(database, `loans/${userId}/${loanId}`);
       const loanSnapshot = await get(loanRef);
 
@@ -143,16 +140,33 @@ const loanService = {
         throw new Error("Loan not found");
       }
 
+      // Fix floating point precision issues
+      let finalRemaining = parseFloat(newRemainingAmount) || 0;
+
+      // Round to 2 decimal places to prevent floating point errors
+      finalRemaining = Math.round(finalRemaining * 100) / 100;
+
+      // CRITICAL FIX: If remaining is very close to zero (less than 2 centavos), set it to exactly zero
+      // This handles cases where 659.95 - 659.94 = 0.009999999999990905 instead of 0.01
+      if (finalRemaining < 0.02 && finalRemaining > -0.02) {
+        finalRemaining = 0;
+      }
+
+      // Additional safety check: ensure it's not negative
+      finalRemaining = Math.max(0, finalRemaining);
+
+      // Determine final status based on remaining amount
+      const finalStatus = finalRemaining === 0 ? "paid" : "active";
+
       const updates = {
-        [`loans/${userId}/${loanId}/remainingAmount`]:
-          parseFloat(newRemainingAmount), // Ensure it's a number
-        [`loans/${userId}/${loanId}/status`]: newStatus,
+        [`loans/${userId}/${loanId}/remainingAmount`]: finalRemaining,
+        [`loans/${userId}/${loanId}/status`]: finalStatus,
         [`loans/${userId}/${loanId}/updatedAt`]: Date.now(),
       };
 
-      console.log("Updating loan with:", updates); // ADD this line
+      console.log("Updating loan with:", updates);
       const result = await update(ref(database), updates);
-      console.log("Update result:", result); // ADD this line
+      console.log("Update result:", result);
 
       return result;
     } catch (error) {
@@ -221,10 +235,13 @@ const loanService = {
       const originalAmount = parseFloat(currentLoan.amount) || 0;
 
       // Add the refund amount back to remaining
-      const newRemainingAmount = Math.min(
+      let newRemainingAmount = Math.min(
         originalAmount,
         currentRemaining + refundAmount
       );
+      // Normalize to 2 decimals and zero-out tiny residuals
+      newRemainingAmount = Math.round(newRemainingAmount * 100) / 100;
+      if (newRemainingAmount <= 0.01) newRemainingAmount = 0;
 
       // Determine new status
       const newStatus =

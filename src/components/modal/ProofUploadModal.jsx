@@ -47,6 +47,10 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Prevent double submission
+    if (uploading) return;
+
     setError("");
 
     const amount = parseFloat(paymentAmount);
@@ -74,11 +78,16 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
     try {
       const uploadResult = await cloudinaryService.uploadImage(selectedFile);
 
-      await onUpload({
+      const result = await onUpload({
         amount: amount,
         proofUrl: uploadResult.secure_url,
         proofPublicId: uploadResult.public_id,
       });
+
+      // Only close if upload was successful
+      if (result && result.success) {
+        onClose();
+      }
     } catch (error) {
       console.error("Upload failed:", error);
       setError(`Failed to upload proof: ${error.message}`);

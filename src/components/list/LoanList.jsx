@@ -3,6 +3,7 @@ import Card from "../common/Card";
 import PaymentHistory from "../payment/PaymentHistory";
 import { Edit3, Trash2, Check, Upload, FileImage } from "lucide-react";
 import MonthlyBreakdown from "../breakdown/MonthlyBreakdown";
+import { updateBreakdownPayments } from "../../utils/loanCalculations";
 
 const LoanList = ({
   loans,
@@ -38,8 +39,30 @@ const LoanList = ({
         if (!loan) return null;
 
         const originalAmount = parseFloat(loan.amount) || 0;
-        const remainingAmount =
-          parseFloat(loan.remainingAmount) || originalAmount;
+        // Robust remaining calculation and rounding
+        const rawRemaining = parseFloat(loan.remainingAmount);
+        let remainingAmount = Number.isFinite(rawRemaining)
+          ? rawRemaining
+          : originalAmount;
+
+        // If monthly breakdown exists, recompute remaining from installments with applied payments
+        if (Array.isArray(loan.monthlyBreakdown) && loan.monthlyBreakdown.length > 0) {
+          const applied = updateBreakdownPayments(loan.monthlyBreakdown, loan.payments);
+          const recomputed = applied.reduce((sum, m) => {
+            const total = parseFloat(m.totalAmount) || 0;
+            const paid = parseFloat(m.paidAmount) || 0;
+            const dueLeft = Math.max(0, total - paid);
+            return sum + dueLeft;
+          }, 0);
+          remainingAmount = recomputed;
+        }
+
+        // Normalize to 2 decimals and zero-out tiny residuals
+        remainingAmount = Math.round(remainingAmount * 100) / 100;
+        if (remainingAmount <= 0.01) {
+          remainingAmount = 0;
+        }
+
         const totalPaid = Math.max(0, originalAmount - remainingAmount);
 
         const dueDateStatus = getDueDateStatus(loan);
@@ -155,7 +178,7 @@ const LoanList = ({
                 </p>
               </div>
               <div className="text-center">
-                {loan.status === "paid" ? (
+                {loan.status === "paid" || remainingAmount === 0 ? (
                   <>
                     <p className="text-slate-400 text-xs mb-1">Status</p>
                     <p className="text-emerald-300 font-bold text-sm flex items-center justify-center gap-1">
@@ -163,7 +186,7 @@ const LoanList = ({
                       PAID
                     </p>
                   </>
-                ) : remainingAmount === loan.amount ? (
+                ) : remainingAmount === originalAmount ? (
                   <>
                     <p className="text-slate-400 text-xs mb-1">Status</p>
                     <p className="text-amber-300 font-bold text-sm">UNPAID</p>
