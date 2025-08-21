@@ -13,8 +13,11 @@ import {
   computeRemainingFromBreakdown,
   normalizeAmount,
 } from "../../utils/loanCalculations";
+import { useTheme } from "../../contexts/ThemeContext";
 
 const Dashboard = ({ loans, onAddLoan }) => {
+  const { colors } = useTheme();
+
   const calculateSummary = () => {
     if (!Array.isArray(loans)) {
       return {
@@ -206,11 +209,15 @@ const Dashboard = ({ loans, onAddLoan }) => {
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex-1">
-          <p className="text-slate-200 text-sm font-medium mb-1">{title}</p>
-          <p className="text-2xl font-bold text-white mb-1">
+          <p className={`${colors.text.secondary} text-sm font-medium mb-1`}>
+            {title}
+          </p>
+          <p className={`text-2xl font-bold ${colors.text.primary} mb-1`}>
             ₱{amount.toLocaleString()}
           </p>
-          {subtitle && <p className="text-slate-300 text-xs">{subtitle}</p>}
+          {subtitle && (
+            <p className={`${colors.text.tertiary} text-xs`}>{subtitle}</p>
+          )}
         </div>
         <div
           className={`w-12 h-12 bg-${
@@ -224,12 +231,14 @@ const Dashboard = ({ loans, onAddLoan }) => {
       {showProgress && originalAmount > 0 && (
         <div className="mb-2">
           <div className="flex justify-between items-center mb-1">
-            <span className="text-slate-300 text-xs">Progress</span>
-            <span className="text-slate-300 text-xs">
+            <span className={`${colors.text.tertiary} text-xs`}>Progress</span>
+            <span className={`${colors.text.tertiary} text-xs`}>
               {progress.toFixed(1)}%
             </span>
           </div>
-          <div className="w-full bg-slate-700/50 rounded-full h-1.5">
+          <div
+            className={`w-full ${colors.background.elevated} rounded-full h-1.5`}
+          >
             <div
               className={`bg-gradient-to-r from-${
                 textColor.split("-")[1]
@@ -242,7 +251,7 @@ const Dashboard = ({ loans, onAddLoan }) => {
         </div>
       )}
 
-      <p className="text-slate-300 text-xs">{count} loans</p>
+      <p className={`${colors.text.tertiary} text-xs`}>{count} loans</p>
     </Card>
   );
 
@@ -250,13 +259,23 @@ const Dashboard = ({ loans, onAddLoan }) => {
     return (
       <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
         <div className="text-center py-16">
-          <div className="w-20 h-20 bg-slate-700/50 rounded-3xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-5xl text-slate-300 font-bold">₱</span>
+          <div
+            className={`w-20 h-20 ${colors.background.elevated} rounded-3xl flex items-center justify-center mx-auto mb-4`}
+          >
+            <span className={`text-5xl ${colors.text.tertiary} font-bold`}>
+              ₱
+            </span>
           </div>
-          <h3 className="text-xl font-semibold text-white mb-2">No loans yet</h3>
-          <p className="text-slate-400 text-sm mb-6">Add your first loan to start</p>
+          <h3 className={`text-xl font-semibold ${colors.text.primary} mb-2`}>
+            No loans yet
+          </h3>
+          <p className={`${colors.text.tertiary} text-sm mb-6`}>
+            Add your first loan to start
+          </p>
           <div className="flex items-center justify-center">
-            <Button onClick={onAddLoan} className="px-5">+ Add Loan</Button>
+            <Button onClick={onAddLoan} className="px-5">
+              + Add Loan
+            </Button>
           </div>
         </div>
       </div>
@@ -314,10 +333,10 @@ const Dashboard = ({ loans, onAddLoan }) => {
       {/* Net Position & Completion Rate */}
       <div className="grid grid-cols-1 gap-4">
         <Card
-          className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 border-slate-600/30 text-center"
+          className={`${colors.background.card} ${colors.border.primary} border text-center`}
           hover={false}
         >
-          <h3 className="text-slate-400 text-lg font-medium mb-4">
+          <h3 className={`${colors.text.secondary} text-lg font-medium mb-4`}>
             Net Position
           </h3>
           <p
@@ -328,13 +347,13 @@ const Dashboard = ({ loans, onAddLoan }) => {
             {netPosition >= 0 ? "+" : ""}₱
             {Math.abs(netPosition).toLocaleString()}
           </p>
-          <p className="text-slate-500 text-sm mb-3">
+          <p className={`${colors.text.tertiary} text-sm mb-3`}>
             {netPosition >= 0
               ? "You are owed more than you owe"
               : "You owe more than you are owed"}
           </p>
           {netOriginal !== netPosition && (
-            <p className="text-slate-400 text-xs">
+            <p className={`${colors.text.tertiary} text-xs`}>
               Original position: {netOriginal >= 0 ? "+" : ""}₱
               {Math.abs(netOriginal).toLocaleString()}
             </p>
@@ -352,7 +371,7 @@ const Dashboard = ({ loans, onAddLoan }) => {
                 <h3 className="text-blue-400 text-lg font-medium">
                   Completion Rate
                 </h3>
-                <p className="text-slate-300 text-sm">
+                <p className={`${colors.text.secondary} text-sm`}>
                   {summary.completionRate.toFixed(1)}% of loans completed
                 </p>
               </div>
@@ -360,13 +379,17 @@ const Dashboard = ({ loans, onAddLoan }) => {
                 <Check className="w-6 h-6 text-blue-400" />
               </div>
             </div>
-            <div className="w-full bg-slate-700/50 rounded-full h-2 mb-2">
+            <div
+              className={`w-full ${colors.background.elevated} rounded-full h-2 mb-2`}
+            >
               <div
                 className="bg-gradient-to-r from-blue-500 to-blue-400 h-2 rounded-full transition-all duration-500"
                 style={{ width: `${summary.completionRate}%` }}
               ></div>
             </div>
-            <div className="flex justify-between text-xs text-slate-400">
+            <div
+              className={`flex justify-between text-xs ${colors.text.tertiary}`}
+            >
               <span>{summary.completedCount} completed</span>
               <span>{summary.pendingCount} pending</span>
             </div>
@@ -386,7 +409,7 @@ const Dashboard = ({ loans, onAddLoan }) => {
             </div>
             <div>
               <h3 className="text-amber-400 font-semibold">Attention Needed</h3>
-              <p className="text-slate-300 text-sm">
+              <p className={`${colors.text.secondary} text-sm`}>
                 Some loans need your attention
               </p>
             </div>
@@ -399,7 +422,7 @@ const Dashboard = ({ loans, onAddLoan }) => {
                 className="flex items-center justify-between p-2 bg-red-500/10 rounded-lg border border-red-500/20"
               >
                 <div className="flex-1">
-                  <p className="text-white font-medium text-sm">
+                  <p className={`${colors.text.primary} font-medium text-sm`}>
                     {loan.personName}
                   </p>
                   <p className="text-red-400 text-xs">
@@ -420,7 +443,7 @@ const Dashboard = ({ loans, onAddLoan }) => {
                 className="flex items-center justify-between p-2 bg-amber-500/10 rounded-lg border border-amber-500/20"
               >
                 <div className="flex-1">
-                  <p className="text-white font-medium text-sm">
+                  <p className={`${colors.text.primary} font-medium text-sm`}>
                     {loan.personName}
                   </p>
                   <p className="text-amber-400 text-xs">
@@ -435,7 +458,7 @@ const Dashboard = ({ loans, onAddLoan }) => {
           </div>
 
           {summary.overdueLoans.length + summary.dueSoonLoans.length > 5 && (
-            <p className="text-slate-400 text-xs text-center mt-3">
+            <p className={`${colors.text.tertiary} text-xs text-center mt-3`}>
               +{summary.overdueLoans.length + summary.dueSoonLoans.length - 5}{" "}
               more loans need attention
             </p>
@@ -445,14 +468,18 @@ const Dashboard = ({ loans, onAddLoan }) => {
 
       {/* Recent Activity */}
       {summary.recentActivity.length > 0 && (
-        <Card className="bg-slate-800/40" hover={false}>
+        <Card className={`${colors.background.secondary}`} hover={false}>
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-slate-600/50 rounded-xl flex items-center justify-center">
-              <History className="w-5 h-5 text-slate-300" />
+            <div
+              className={`w-10 h-10 ${colors.background.elevated} rounded-xl flex items-center justify-center`}
+            >
+              <History className={`w-5 h-5 ${colors.text.secondary}`} />
             </div>
             <div>
-              <h3 className="text-slate-200 font-semibold">Recent Activity</h3>
-              <p className="text-slate-400 text-sm">
+              <h3 className={`${colors.text.primary} font-semibold`}>
+                Recent Activity
+              </h3>
+              <p className={`${colors.text.tertiary} text-sm`}>
                 Latest payment activities
               </p>
             </div>
@@ -462,7 +489,7 @@ const Dashboard = ({ loans, onAddLoan }) => {
             {summary.recentActivity.slice(0, 5).map((activity, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between p-2 bg-slate-700/30 rounded-lg"
+                className={`flex items-center justify-between p-2 ${colors.background.elevated} rounded-lg`}
               >
                 <div className="flex items-center gap-3 flex-1">
                   <div className="w-6 h-6 bg-emerald-500/20 rounded-md flex items-center justify-center">
@@ -471,10 +498,12 @@ const Dashboard = ({ loans, onAddLoan }) => {
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium text-sm truncate">
+                    <p
+                      className={`${colors.text.primary} font-medium text-sm truncate`}
+                    >
                       {activity.personName}
                     </p>
-                    <p className="text-slate-400 text-xs">
+                    <p className={`${colors.text.tertiary} text-xs`}>
                       {new Date(activity.timestamp).toLocaleDateString()}
                     </p>
                   </div>
@@ -501,16 +530,21 @@ const Dashboard = ({ loans, onAddLoan }) => {
 
       {/* Quick Stats Summary */}
       {loans.length > 5 && (
-        <Card className="bg-slate-800/30 border-slate-600/20" hover={false}>
-          <h3 className="text-slate-300 font-medium mb-3 text-center">
+        <Card
+          className={`${colors.background.secondary} ${colors.border.secondary} border`}
+          hover={false}
+        >
+          <h3
+            className={`${colors.text.secondary} font-medium mb-3 text-center`}
+          >
             Quick Overview
           </h3>
           <div className="grid grid-cols-2 gap-4 text-center">
             <div>
-              <p className="text-2xl font-bold text-white mb-1">
+              <p className={`text-2xl font-bold ${colors.text.primary} mb-1`}>
                 {loans.length}
               </p>
-              <p className="text-slate-400 text-sm">Total Loans</p>
+              <p className={`${colors.text.tertiary} text-sm`}>Total Loans</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-emerald-400 mb-1">
@@ -519,7 +553,7 @@ const Dashboard = ({ loans, onAddLoan }) => {
                   summary.totalLentOriginal + summary.totalBorrowedOriginal
                 ).toLocaleString()}
               </p>
-              <p className="text-slate-400 text-sm">Total Value</p>
+              <p className={`${colors.text.tertiary} text-sm`}>Total Value</p>
             </div>
           </div>
         </Card>

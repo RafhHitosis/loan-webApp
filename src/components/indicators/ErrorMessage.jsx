@@ -1,7 +1,10 @@
 import { AlertTriangle } from "lucide-react";
 import { X } from "lucide-react";
+import { useTheme } from "../../contexts/ThemeContext"; // Update the import path
 
 const ErrorMessage = ({ error, onClose }) => {
+  useTheme();
+
   if (!error) return null;
 
   return (

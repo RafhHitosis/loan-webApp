@@ -2,8 +2,10 @@ import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import ErrorMessage from "./../indicators/ErrorMessage";
 import Button from "./../common/Button";
+import { useTheme } from "../../contexts/ThemeContext";
 
 const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
+  const { colors, isDarkMode } = useTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     amount: "",
@@ -94,14 +96,26 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
 
   if (!open) return null;
 
+  // Input styles based on theme
+  const inputBaseClasses = `w-full px-3 py-2.5 ${colors.background.elevated} ${colors.border.primary} rounded-lg ${colors.text.primary} focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm`;
+  const placeholderClasses = isDarkMode
+    ? "placeholder-slate-400"
+    : "placeholder-gray-500";
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-200">
-      <div className="bg-slate-800/95 backdrop-blur-xl border-t border-slate-600/50 sm:border sm:border-slate-600/50 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-4 duration-300">
-        <div className="flex items-center justify-between p-6 border-b border-slate-600/30">
-          <h2 className="text-xl font-bold text-white">Manual Receipt</h2>
+      <div
+        className={`${colors.background.card} backdrop-blur-xl border-t ${colors.border.primary} sm:border ${colors.border.primary} rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-4 duration-300 shadow-2xl`}
+      >
+        <div
+          className={`flex items-center justify-between p-6 border-b ${colors.border.secondary}`}
+        >
+          <h2 className={`text-xl font-bold ${colors.text.primary}`}>
+            Manual Receipt
+          </h2>
           <button
             onClick={onClose}
-            className="w-10 h-10 rounded-full bg-slate-700/50 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all duration-200"
+            className={`w-10 h-10 rounded-full ${colors.background.elevated} ${colors.interactive.hover} flex items-center justify-center ${colors.text.tertiary} hover:${colors.text.secondary} transition-all duration-200`}
           >
             <X className="w-5 h-5" />
           </button>
@@ -113,18 +127,22 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
           {/* Amount and Date Row */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-300 text-sm font-medium mb-2">
+              <label
+                className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+              >
                 Amount
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm">
+                <span
+                  className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${colors.text.tertiary} text-sm`}
+                >
                   ₱
                 </span>
                 <input
                   type="number"
                   value={formData.amount}
                   onChange={(e) => updateFormData("amount", e.target.value)}
-                  className="w-full pl-7 pr-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+                  className={`${inputBaseClasses} pl-7 ${placeholderClasses}`}
                   placeholder="0.00"
                   min="0.01"
                   step="0.01"
@@ -134,14 +152,16 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
             </div>
 
             <div>
-              <label className="block text-slate-300 text-sm font-medium mb-2">
+              <label
+                className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+              >
                 Date
               </label>
               <input
                 type="date"
                 value={formData.date}
                 onChange={(e) => updateFormData("date", e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+                className={inputBaseClasses}
                 required
               />
             </div>
@@ -150,20 +170,24 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
           {/* Time and Payment Method */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-300 text-sm font-medium mb-2">
+              <label
+                className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+              >
                 Time
               </label>
               <input
                 type="time"
                 value={formData.time}
                 onChange={(e) => updateFormData("time", e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+                className={inputBaseClasses}
                 required
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 text-sm font-medium mb-2">
+              <label
+                className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+              >
                 Method
               </label>
               <select
@@ -171,7 +195,7 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
                 onChange={(e) =>
                   updateFormData("paymentMethod", e.target.value)
                 }
-                className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+                className={inputBaseClasses}
               >
                 <option value="cash">Cash</option>
                 <option value="check">Check</option>
@@ -183,14 +207,16 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
 
           {/* Location */}
           <div>
-            <label className="block text-slate-300 text-sm font-medium mb-2">
+            <label
+              className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+            >
               Location
             </label>
             <input
               type="text"
               value={formData.location}
               onChange={(e) => updateFormData("location", e.target.value)}
-              className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+              className={`${inputBaseClasses} ${placeholderClasses}`}
               placeholder="Where was the payment made?"
               required
             />
@@ -199,23 +225,31 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
           {/* Witness Information */}
           <div className="space-y-3">
             <div>
-              <label className="block text-slate-300 text-sm font-medium mb-2">
+              <label
+                className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+              >
                 Witness Name{" "}
-                <span className="text-slate-500 text-xs">(Optional)</span>
+                <span className={`${colors.text.muted} text-xs`}>
+                  (Optional)
+                </span>
               </label>
               <input
                 type="text"
                 value={formData.witnessName}
                 onChange={(e) => updateFormData("witnessName", e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+                className={`${inputBaseClasses} ${placeholderClasses}`}
                 placeholder="Full name"
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 text-sm font-medium mb-2">
+              <label
+                className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+              >
                 Witness Contact{" "}
-                <span className="text-slate-500 text-xs">(Optional)</span>
+                <span className={`${colors.text.muted} text-xs`}>
+                  (Optional)
+                </span>
               </label>
               <input
                 type="text"
@@ -223,7 +257,7 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
                 onChange={(e) =>
                   updateFormData("witnessContact", e.target.value)
                 }
-                className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-small"
+                className={`${inputBaseClasses} ${placeholderClasses}`}
                 placeholder="Phone/Email"
               />
             </div>
@@ -231,7 +265,9 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
 
           {/* Description */}
           <div>
-            <label className="block text-slate-300 text-sm font-medium mb-2">
+            <label
+              className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+            >
               Notes (Optional)
             </label>
             <textarea
@@ -239,18 +275,18 @@ const ManualReceiptModal = ({ loan, open, onClose, onSave }) => {
               onChange={(e) => updateFormData("description", e.target.value)}
               rows={3}
               maxLength="200"
-              className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 resize-none text-sm"
+              className={`${inputBaseClasses} ${placeholderClasses} resize-none`}
               placeholder="Additional details about the payment..."
             />
             <div className="text-right mt-1">
-              <span className="text-xs text-slate-400">
+              <span className={`text-xs ${colors.text.tertiary}`}>
                 {formData.description.length}/200
               </span>
             </div>
           </div>
         </form>
 
-        <div className="flex gap-3 p-6 border-t border-slate-600/30">
+        <div className={`flex gap-3 p-6 border-t ${colors.border.secondary}`}>
           <Button variant="ghost" onClick={onClose} className="flex-1">
             Cancel
           </Button>

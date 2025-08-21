@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { useTheme } from "../../contexts/ThemeContext";
 import Input from "../common/Input";
 import Button from "../common/Button";
 import ErrorMessage from "./../indicators/ErrorMessage";
@@ -12,6 +13,7 @@ const LoginForm = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { signIn, signUp } = useAuth();
+  const { colors } = useTheme();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -85,18 +87,22 @@ const LoginForm = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-white/5 backdrop-blur-xl rounded-3xl p-8 border border-white/10 shadow-2xl animate-in slide-in-from-bottom-4 duration-700">
+    <div
+      className={`min-h-screen ${colors.background.primary} flex items-center justify-center p-4`}
+    >
+      <div
+        className={`w-full max-w-sm ${colors.background.card} backdrop-blur-xl rounded-3xl p-8 ${colors.border.primary} border shadow-2xl animate-in slide-in-from-bottom-4 duration-700`}
+      >
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-6 transform rotate-3 shadow-lg">
             <span className="w-10 h-10 text-white text-5xl font-bold flex items-center justify-center">
               ₱
             </span>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">
+          <h1 className={`text-3xl font-bold ${colors.text.primary} mb-2`}>
             {isSignUp ? "Join Us" : "Welcome Back"}
           </h1>
-          <p className="text-slate-400">
+          <p className={colors.text.secondary}>
             {isSignUp
               ? "Create your account to start tracking"
               : "Sign in to continue"}
@@ -116,20 +122,34 @@ const LoginForm = () => {
           />
 
           <div className="relative">
-            <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <Lock
+              className={`absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 ${colors.text.tertiary}`}
+            />
             <input
               type={showPassword ? "text" : "password"}
               placeholder="Password"
               value={formData.password}
               onChange={(e) => updateFormData("password", e.target.value)}
-              className="w-full pl-12 pr-12 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
+              className={`w-full pl-12 pr-12 py-4 ${
+                colors.background.secondary
+              } ${colors.border.primary} border rounded-xl ${
+                colors.text.primary
+              } ${colors.text.tertiary.replace(
+                "text-",
+                "placeholder-"
+              )} focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200`}
               required
               minLength="6"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-300 transition-colors"
+              className={`absolute right-4 top-1/2 transform -translate-y-1/2 ${
+                colors.text.tertiary
+              } ${colors.interactive.hover
+                .replace("hover:bg-", "hover:text-")
+                .replace("slate-700/50", "slate-300")
+                .replace("gray-100", "gray-600")} transition-colors`}
             >
               {showPassword ? (
                 <EyeOff className="w-5 h-5" />
@@ -160,7 +180,7 @@ const LoginForm = () => {
               setError(""); // Clear errors when switching
               setFormData({ email: "", password: "" }); // Clear form
             }}
-            className="text-slate-400 hover:text-emerald-400 transition-colors duration-200"
+            className={`${colors.text.secondary} hover:text-emerald-400 transition-colors duration-200`}
           >
             {isSignUp
               ? "Already have an account? Sign in"

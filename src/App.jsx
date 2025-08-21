@@ -1,6 +1,8 @@
+// src/App.js
 import React from "react";
 import { AlertTriangle } from "lucide-react";
 import { AuthProvider } from "./contexts/AuthContext";
+import { ThemeProvider } from "./contexts/ThemeContext"; // ADD this import
 import AppContent from "./components/AppContent/AppContent";
 
 class ErrorBoundary extends React.Component {
@@ -48,9 +50,12 @@ class ErrorBoundary extends React.Component {
 
 const App = () => (
   <ErrorBoundary>
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ThemeProvider>
+      {" "}
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ThemeProvider>{" "}
   </ErrorBoundary>
 );
 

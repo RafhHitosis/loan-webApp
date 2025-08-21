@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from "react";
 import { AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { useTheme } from "../../contexts/ThemeContext"; // Update the import path
 
 const DueDateWarning = ({ loans, onLoanClick }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const { colors } = useTheme();
 
   const dueDateAnalysis = useMemo(() => {
     if (!loans || loans.length === 0)
@@ -90,7 +92,7 @@ const DueDateWarning = ({ loans, onLoanClick }) => {
               >
                 {dueDateAnalysis.urgent.length > 0 ? "Urgent!" : "Due Soon"}
               </p>
-              <p className="text-slate-300 text-xs">
+              <p className={`${colors.text.secondary} text-xs`}>
                 {dueDateAnalysis.count} loan
                 {dueDateAnalysis.count !== 1 ? "s" : ""} need attention
               </p>
@@ -108,9 +110,9 @@ const DueDateWarning = ({ loans, onLoanClick }) => {
               </span>
             )}
             {isExpanded ? (
-              <ChevronUp className="w-4 h-4 text-slate-400" />
+              <ChevronUp className={`w-4 h-4 ${colors.text.tertiary}`} />
             ) : (
-              <ChevronDown className="w-4 h-4 text-slate-400" />
+              <ChevronDown className={`w-4 h-4 ${colors.text.tertiary}`} />
             )}
           </div>
         </div>
@@ -132,7 +134,9 @@ const DueDateWarning = ({ loans, onLoanClick }) => {
                     </span>
                   </div>
                   <div className="flex-1 min-w-0 text-left">
-                    <p className="text-white font-medium text-sm truncate">
+                    <p
+                      className={`${colors.text.primary} font-medium text-sm truncate`}
+                    >
                       {loan.personName}
                     </p>
                     <p className="text-red-400 text-xs">
@@ -146,7 +150,7 @@ const DueDateWarning = ({ loans, onLoanClick }) => {
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-white font-semibold text-sm">
+                  <p className={`${colors.text.primary} font-semibold text-sm`}>
                     ₱{(loan.remainingAmount || loan.amount).toLocaleString()}
                   </p>
                   <span className="text-red-400 text-xs px-2 py-0.5 bg-red-500/20 rounded-full">
@@ -171,7 +175,9 @@ const DueDateWarning = ({ loans, onLoanClick }) => {
                     </span>
                   </div>
                   <div className="flex-1 min-w-0 text-left">
-                    <p className="text-white font-medium text-sm truncate">
+                    <p
+                      className={`${colors.text.primary} font-medium text-sm truncate`}
+                    >
                       {loan.personName}
                     </p>
                     <p className="text-amber-400 text-xs">
@@ -180,7 +186,7 @@ const DueDateWarning = ({ loans, onLoanClick }) => {
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-white font-semibold text-sm">
+                  <p className={`${colors.text.primary} font-semibold text-sm`}>
                     ₱{(loan.remainingAmount || loan.amount).toLocaleString()}
                   </p>
                   <span className="text-amber-400 text-xs px-2 py-0.5 bg-amber-500/20 rounded-full">

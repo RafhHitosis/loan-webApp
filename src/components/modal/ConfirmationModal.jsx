@@ -1,5 +1,6 @@
 import { Trash2, LogOut } from "lucide-react";
 import Button from "../common/Button";
+import { useTheme } from "../../contexts/ThemeContext";
 
 const ConfirmationModal = ({
   open,
@@ -11,6 +12,8 @@ const ConfirmationModal = ({
   cancelText = "Cancel",
   type = "danger", // "danger" or "warning"
 }) => {
+  const { colors, isDarkMode } = useTheme();
+
   if (!open) return null;
 
   const typeStyles = {
@@ -18,15 +21,17 @@ const ConfirmationModal = ({
       icon: Trash2,
       iconBg: "bg-red-500/20",
       iconColor: "text-red-400",
-      confirmBtn:
-        "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700",
+      confirmBtn: isDarkMode
+        ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
+        : "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700",
     },
     warning: {
       icon: LogOut,
       iconBg: "bg-amber-500/20",
       iconColor: "text-amber-400",
-      confirmBtn:
-        "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700",
+      confirmBtn: isDarkMode
+        ? "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
+        : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700",
     },
   };
 
@@ -35,7 +40,9 @@ const ConfirmationModal = ({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-      <div className="bg-slate-800/95 backdrop-blur-xl border border-slate-600/50 rounded-3xl w-full max-w-md animate-in slide-in-from-bottom-4 duration-300">
+      <div
+        className={`${colors.background.card} backdrop-blur-xl ${colors.border.primary} rounded-3xl w-full max-w-md animate-in slide-in-from-bottom-4 duration-300 shadow-2xl`}
+      >
         <div className="p-6">
           <div className="flex items-start gap-4 mb-6">
             <div
@@ -44,8 +51,10 @@ const ConfirmationModal = ({
               <Icon className={`w-6 h-6 ${style.iconColor}`} />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
-              <p className="text-slate-300 text-sm leading-relaxed">
+              <h3 className={`text-xl font-bold ${colors.text.primary} mb-2`}>
+                {title}
+              </h3>
+              <p className={`${colors.text.secondary} text-sm leading-relaxed`}>
                 {message}
               </p>
             </div>

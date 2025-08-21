@@ -4,8 +4,11 @@ import Button from "../common/Button";
 import ConfirmationModal from "../modal/ConfirmationModal";
 import { X } from "lucide-react";
 import { calculateMonthlyBreakdown } from "../../utils/loanCalculations";
+import { useTheme } from "../../contexts/ThemeContext";
 
 const LoanForm = ({ loan, open, onClose, onSave }) => {
+  const { colors } = useTheme();
+
   const [formData, setFormData] = useState({
     personName: "",
     amount: "",
@@ -162,10 +165,14 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
   return (
     <>
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-200">
-        <div className="bg-slate-800/95 backdrop-blur-xl border-t border-slate-600/50 sm:border sm:border-slate-600/50 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-4 duration-300">
-          <div className="flex items-center justify-between p-6 border-b border-slate-600/30">
+        <div
+          className={`${colors.background.card} backdrop-blur-xl border-t ${colors.border.primary} sm:border sm:${colors.border.primary} rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-4 duration-300`}
+        >
+          <div
+            className={`flex items-center justify-between p-6 border-b ${colors.border.secondary}`}
+          >
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-white">
+              <h2 className={`text-xl font-bold ${colors.text.primary}`}>
                 {loan ? "Edit Loan" : "Add New Loan"}
               </h2>
               {hasUnsavedChanges && (
@@ -177,7 +184,14 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
             </div>
             <button
               onClick={handleClose}
-              className="w-10 h-10 rounded-full bg-slate-700/50 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all duration-200"
+              className={`w-10 h-10 rounded-full ${
+                colors.background.elevated
+              } ${colors.interactive.hover} flex items-center justify-center ${
+                colors.text.tertiary
+              } hover:${colors.text.secondary.replace(
+                "text-",
+                ""
+              )} transition-all duration-200`}
             >
               <X className="w-5 h-5" />
             </button>
@@ -187,14 +201,23 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
             <ErrorMessage error={error} onClose={() => setError("")} />
 
             <div>
-              <label className="block text-slate-300 text-sm font-medium mb-2">
+              <label
+                className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+              >
                 Person Name
               </label>
               <input
                 type="text"
                 value={formData.personName}
                 onChange={(e) => updateFormData("personName", e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
+                className={`w-full px-4 py-3 ${
+                  colors.background.elevated
+                } border ${colors.border.primary} rounded-xl ${
+                  colors.text.primary
+                } ${colors.text.tertiary.replace(
+                  "text-",
+                  "placeholder-"
+                )} focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200`}
                 placeholder="Enter person's name"
                 required
                 minLength="1"
@@ -203,21 +226,32 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
             </div>
 
             <div>
-              <label className="block text-slate-300 text-sm font-medium mb-2">
+              <label
+                className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+              >
                 Principal Amount
-                <span className="text-slate-400 text-xs ml-1">
+                <span className={`${colors.text.tertiary} text-xs ml-1`}>
                   (Amount before interest)
                 </span>
               </label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
+                <span
+                  className={`absolute left-4 top-1/2 transform -translate-y-1/2 ${colors.text.tertiary}`}
+                >
                   ₱
                 </span>
                 <input
                   type="number"
                   value={formData.amount}
                   onChange={(e) => updateFormData("amount", e.target.value)}
-                  className="w-full pl-8 pr-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
+                  className={`w-full pl-8 pr-4 py-3 ${
+                    colors.background.elevated
+                  } border ${colors.border.primary} rounded-xl ${
+                    colors.text.primary
+                  } ${colors.text.tertiary.replace(
+                    "text-",
+                    "placeholder-"
+                  )} focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200`}
                   placeholder="0.00"
                   min="0.01"
                   step="0.01"
@@ -227,7 +261,9 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
             </div>
 
             <div>
-              <label className="block text-slate-300 text-sm font-medium mb-2">
+              <label
+                className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+              >
                 Type
               </label>
               <div className="grid grid-cols-2 gap-3">
@@ -241,7 +277,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                         ? type === "lent"
                           ? "bg-emerald-500 text-white"
                           : "bg-red-500 text-white"
-                        : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
+                        : `${colors.background.elevated} ${colors.text.secondary} ${colors.interactive.hover}`
                     }`}
                   >
                     Money I {type === "lent" ? "Lent" : "Borrowed"}
@@ -251,20 +287,24 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
             </div>
 
             <div>
-              <label className="block text-slate-300 text-sm font-medium mb-2">
+              <label
+                className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+              >
                 Date
               </label>
               <input
                 type="date"
                 value={formData.date}
                 onChange={(e) => updateFormData("date", e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
+                className={`w-full px-4 py-3 ${colors.background.elevated} border ${colors.border.primary} rounded-xl ${colors.text.primary} focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200`}
                 required
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 text-sm font-medium mb-2">
+              <label
+                className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+              >
                 Due Date (Optional)
               </label>
               <input
@@ -272,13 +312,15 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                 value={formData.dueDate}
                 onChange={(e) => updateFormData("dueDate", e.target.value)}
                 min={formData.date}
-                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
+                className={`w-full px-4 py-3 ${colors.background.elevated} border ${colors.border.primary} rounded-xl ${colors.text.primary} focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200`}
               />
             </div>
 
             {formData.dueDate && (
               <div className="space-y-3">
-                <label className="block text-slate-300 text-sm font-medium">
+                <label
+                  className={`block ${colors.text.secondary} text-sm font-medium`}
+                >
                   Monthly Interest Rate
                 </label>
 
@@ -311,7 +353,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                       className={`p-3 rounded-xl text-center transition-all duration-200 ${
                         Math.abs(interestRate - option.rate) < 0.0001
                           ? `${option.color} text-white shadow-lg`
-                          : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
+                          : `${colors.background.elevated} ${colors.text.secondary} ${colors.interactive.hover}`
                       }`}
                     >
                       <div className="font-semibold text-sm">
@@ -323,9 +365,13 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                 </div>
 
                 {/* Custom Rate Input - Enhanced for decimal precision */}
-                <div className="bg-slate-700/20 rounded-xl p-3">
+                <div
+                  className={`${colors.background.secondary} rounded-xl p-3`}
+                >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-slate-300 text-sm font-medium">
+                    <span
+                      className={`${colors.text.secondary} text-sm font-medium`}
+                    >
                       Custom Rate
                     </span>
                     <div className="flex items-center gap-2">
@@ -340,12 +386,14 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                           const value = parseFloat(e.target.value) || 0;
                           setInterestRate(value / 100);
                         }}
-                        className="w-20 px-2 py-1 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white text-sm text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        className={`w-20 px-2 py-1 ${colors.background.elevated} border ${colors.border.primary} rounded-lg ${colors.text.primary} text-sm text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50`}
                         step="0.01"
                         min="0"
                         max="20"
                       />
-                      <span className="text-slate-400 text-sm">%</span>
+                      <span className={`${colors.text.tertiary} text-sm`}>
+                        %
+                      </span>
                     </div>
                   </div>
 
@@ -368,13 +416,17 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                       }%, #475569 ${interestRate * 100 * 5}%, #475569 100%)`,
                     }}
                   />
-                  <div className="flex justify-between text-xs text-slate-400 mt-1">
+                  <div
+                    className={`flex justify-between text-xs ${colors.text.tertiary} mt-1`}
+                  >
                     <span>0%</span>
                     <span>20%</span>
                   </div>
 
                   {/* Display exact percentage */}
-                  <div className="text-center text-xs text-slate-400 mt-1">
+                  <div
+                    className={`text-center text-xs ${colors.text.tertiary} mt-1`}
+                  >
                     Current: {(interestRate * 100).toFixed(2)}% monthly
                   </div>
                 </div>
@@ -394,7 +446,9 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                           interestRate === 0 ? "bg-blue-400" : "bg-emerald-400"
                         }`}
                       ></div>
-                      <span className="text-slate-200 font-medium text-sm">
+                      <span
+                        className={`${colors.text.primary} font-medium text-sm`}
+                      >
                         {interestRate === 0
                           ? "Payment Plan (No Interest)"
                           : "GLoan Preview (Flat Add-on)"}
@@ -436,15 +490,21 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
 
                           {/* Processing Fee & Net Proceeds - GLoan specific */}
                           {interestRate > 0 && (
-                            <div className="bg-slate-700/20 border border-slate-600/20 rounded-lg p-3 mb-2">
+                            <div
+                              className={`${colors.background.secondary} border ${colors.border.secondary} rounded-lg p-3 mb-2`}
+                            >
                               <div className="text-center mb-2">
-                                <div className="text-slate-300 text-xs font-medium">
+                                <div
+                                  className={`${colors.text.secondary} text-xs font-medium`}
+                                >
                                   GLoan Processing
                                 </div>
                               </div>
                               <div className="grid grid-cols-2 gap-2">
                                 <div className="text-center">
-                                  <div className="text-slate-400 text-xs">
+                                  <div
+                                    className={`${colors.text.tertiary} text-xs`}
+                                  >
                                     Processing Fee (3%)
                                   </div>
                                   <div className="text-red-400 font-semibold text-sm">
@@ -452,7 +512,9 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                                   </div>
                                 </div>
                                 <div className="text-center">
-                                  <div className="text-slate-400 text-xs">
+                                  <div
+                                    className={`${colors.text.tertiary} text-xs`}
+                                  >
                                     Net Proceeds
                                   </div>
                                   <div className="text-emerald-400 font-semibold text-sm">
@@ -468,11 +530,13 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                             className={`rounded-lg p-3 ${
                               interestRate === 0
                                 ? "bg-blue-500/20"
-                                : "bg-slate-700/30"
+                                : `${colors.background.elevated}`
                             }`}
                           >
                             <div className="text-center">
-                              <div className="text-slate-400 text-xs mb-1">
+                              <div
+                                className={`${colors.text.tertiary} text-xs mb-1`}
+                              >
                                 {interestRate === 0
                                   ? "Monthly Payment (Equal Splits)"
                                   : "Standard Monthly Payment"}
@@ -488,7 +552,9 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                               </div>
                               {/* Show breakdown of monthly payment */}
                               {interestRate > 0 && (
-                                <div className="text-xs text-slate-400 mt-1">
+                                <div
+                                  className={`text-xs ${colors.text.tertiary} mt-1`}
+                                >
                                   ₱{preview.principalPerMonth.toLocaleString()}{" "}
                                   avg. principal + ₱
                                   {preview.interestPerMonth.toLocaleString()}{" "}
@@ -506,16 +572,26 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
 
                           {/* Summary Grid */}
                           <div className="grid grid-cols-2 gap-2">
-                            <div className="bg-slate-700/20 rounded-lg p-2 text-center">
-                              <div className="text-slate-400 text-xs">
+                            <div
+                              className={`${colors.background.secondary} rounded-lg p-2 text-center`}
+                            >
+                              <div
+                                className={`${colors.text.tertiary} text-xs`}
+                              >
                                 Total Repayment
                               </div>
-                              <div className="text-white font-semibold text-sm">
+                              <div
+                                className={`${colors.text.primary} font-semibold text-sm`}
+                              >
                                 ₱{preview.totalAmount.toLocaleString()}
                               </div>
                             </div>
-                            <div className="bg-slate-700/20 rounded-lg p-2 text-center">
-                              <div className="text-slate-400 text-xs">
+                            <div
+                              className={`${colors.background.secondary} rounded-lg p-2 text-center`}
+                            >
+                              <div
+                                className={`${colors.text.tertiary} text-xs`}
+                              >
                                 {interestRate === 0
                                   ? "Interest Saved"
                                   : "Total Interest"}
@@ -536,8 +612,12 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
 
                           {/* GLoan Formula Info */}
                           {interestRate > 0 && (
-                            <div className="bg-slate-700/10 rounded-lg p-2 text-center">
-                              <div className="text-slate-400 text-xs">
+                            <div
+                              className={`${colors.background.secondary} rounded-lg p-2 text-center`}
+                            >
+                              <div
+                                className={`${colors.text.tertiary} text-xs`}
+                              >
                                 Formula: (₱
                                 {parseFloat(formData.amount).toLocaleString()} +
                                 ₱{preview.totalInterest.toLocaleString()}) ÷{" "}
@@ -548,7 +628,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
 
                           {/* Number of Payments with context */}
                           <div className="text-center">
-                            <span className="text-slate-400 text-xs">
+                            <span className={`${colors.text.tertiary} text-xs`}>
                               {preview.monthlyBreakdown.length} monthly payments
                               {interestRate === 0
                                 ? " • Interest-free"
@@ -558,7 +638,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
 
                           {/* Show date range for clarity */}
                           <div className="text-center">
-                            <span className="text-slate-500 text-xs">
+                            <span className={`${colors.text.muted} text-xs`}>
                               From{" "}
                               {new Date(formData.date).toLocaleDateString()} to{" "}
                               {new Date(formData.dueDate).toLocaleDateString()}
@@ -583,7 +663,9 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
             )}
 
             <div>
-              <label className="block text-slate-300 text-sm font-medium mb-2">
+              <label
+                className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+              >
                 Description (Optional)
               </label>
               <textarea
@@ -591,18 +673,27 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                 onChange={(e) => updateFormData("description", e.target.value)}
                 rows={3}
                 maxLength="500"
-                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 resize-none transition-all duration-200"
+                className={`w-full px-4 py-3 ${
+                  colors.background.elevated
+                } border ${colors.border.primary} rounded-xl ${
+                  colors.text.primary
+                } ${colors.text.tertiary.replace(
+                  "text-",
+                  "placeholder-"
+                )} focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 resize-none transition-all duration-200`}
                 placeholder="Add a note about this loan..."
               />
               <div className="text-right mt-1">
-                <span className="text-xs text-slate-400">
+                <span className={`text-xs ${colors.text.tertiary}`}>
                   {formData.description.length}/500
                 </span>
               </div>
             </div>
 
             <div>
-              <label className="block text-slate-300 text-sm font-medium mb-2">
+              <label
+                className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+              >
                 Status
               </label>
               <div className="grid grid-cols-2 gap-3">
@@ -616,7 +707,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                         ? status === "active"
                           ? "bg-amber-500 text-white"
                           : "bg-emerald-500 text-white"
-                        : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
+                        : `${colors.background.elevated} ${colors.text.secondary} ${colors.interactive.hover}`
                     }`}
                   >
                     {status === "active" ? "Active" : "Paid"}
@@ -626,7 +717,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
             </div>
           </div>
 
-          <div className="flex gap-3 p-6 border-t border-slate-600/30">
+          <div className={`flex gap-3 p-6 border-t ${colors.border.secondary}`}>
             <Button variant="ghost" onClick={handleClose} className="flex-1">
               Cancel
             </Button>

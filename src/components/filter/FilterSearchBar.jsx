@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Plus, Search, Filter, X } from "lucide-react";
+import { useTheme } from "../../contexts/ThemeContext"; // Update the import path
 
 const FilterSearchBar = ({
   searchQuery,
@@ -7,10 +8,11 @@ const FilterSearchBar = ({
   filters,
   setFilters,
   loans,
-  onAddLoan, // ADD this new prop
+  onAddLoan,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const { colors } = useTheme();
 
   // Calculate filter counts
   const filterCounts = useMemo(() => {
@@ -89,7 +91,7 @@ const FilterSearchBar = ({
           className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 ${
             showSearch || searchQuery
               ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-              : "bg-slate-700/50 text-slate-400 hover:text-slate-200 hover:bg-slate-700"
+              : `${colors.background.elevated} ${colors.text.tertiary} hover:${colors.text.secondary} ${colors.interactive.hover}`
           }`}
           title="Search loans"
         >
@@ -102,7 +104,7 @@ const FilterSearchBar = ({
           className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 ${
             isExpanded || hasActiveFilters
               ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-              : "bg-slate-700/50 text-slate-400 hover:text-slate-200 hover:bg-slate-700"
+              : `${colors.background.elevated} ${colors.text.tertiary} hover:${colors.text.secondary} ${colors.interactive.hover}`
           }`}
           title="Filter loans"
         >
@@ -112,11 +114,15 @@ const FilterSearchBar = ({
         {/* Active filter indicator */}
         {hasActiveFilters && (
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <div className="flex items-center gap-1 px-2 py-1 bg-slate-700/50 rounded-lg">
-              <span className="text-slate-300 text-xs">Filtered</span>
+            <div
+              className={`flex items-center gap-1 px-2 py-1 ${colors.background.elevated} rounded-lg`}
+            >
+              <span className={`${colors.text.secondary} text-xs`}>
+                Filtered
+              </span>
               <button
                 onClick={resetFilters}
-                className="text-slate-400 hover:text-slate-200 transition-colors"
+                className={`${colors.text.tertiary} hover:${colors.text.secondary} transition-colors`}
                 title="Clear all filters"
               >
                 <X className="w-3 h-3" />
@@ -137,23 +143,24 @@ const FilterSearchBar = ({
         </div>
       </div>
 
-      {/* Rest of the component remains the same... */}
       {/* Search Bar */}
       {showSearch && (
         <div className="animate-in slide-in-from-top-2 duration-200">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search
+              className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 ${colors.text.tertiary}`}
+            />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by person name..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200 text-sm"
+              className={`w-full pl-10 pr-4 py-2.5 ${colors.background.elevated} ${colors.border.primary} border rounded-xl ${colors.text.primary} placeholder:${colors.text.tertiary} focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200 text-sm`}
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                className={`absolute right-3 top-1/2 transform -translate-y-1/2 ${colors.text.tertiary} hover:${colors.text.secondary} transition-colors`}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -164,10 +171,14 @@ const FilterSearchBar = ({
 
       {/* Filter Options */}
       {isExpanded && (
-        <div className="animate-in slide-in-from-top-2 duration-200 space-y-3 bg-slate-800/30 rounded-xl p-4 border border-slate-600/30">
+        <div
+          className={`animate-in slide-in-from-top-2 duration-200 space-y-3 ${colors.background.secondary} rounded-xl p-4 ${colors.border.primary} border`}
+        >
           {/* Type Filter */}
           <div>
-            <label className="block text-slate-300 text-sm font-medium mb-2">
+            <label
+              className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+            >
               Loan Type
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -201,7 +212,7 @@ const FilterSearchBar = ({
                     className={`p-2 rounded-lg text-xs font-medium transition-all duration-200 ${
                       filters.status === key
                         ? key === "all"
-                          ? "bg-slate-600 text-white"
+                          ? `${colors.background.elevated} ${colors.text.primary}`
                           : key === "active"
                           ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
                           : key === "paid"
@@ -210,8 +221,8 @@ const FilterSearchBar = ({
                           ? "bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse"
                           : key === "due-soon"
                           ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                          : "bg-slate-600 text-white"
-                        : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
+                          : `${colors.background.elevated} ${colors.text.primary}`
+                        : `${colors.background.elevated} ${colors.text.secondary} ${colors.interactive.hover}`
                     } ${
                       color === "red" && count > 0 && key !== filters.status
                         ? "ring-1 ring-red-500/30"
@@ -229,7 +240,9 @@ const FilterSearchBar = ({
 
           {/* Status Filter */}
           <div>
-            <label className="block text-slate-300 text-sm font-medium mb-2">
+            <label
+              className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+            >
               Status
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -246,11 +259,11 @@ const FilterSearchBar = ({
                   className={`p-2 rounded-lg text-xs font-medium transition-all duration-200 ${
                     filters.status === key
                       ? key === "all"
-                        ? "bg-slate-600 text-white"
+                        ? `${colors.background.elevated} ${colors.text.primary}`
                         : key === "active"
                         ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
                         : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                      : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
+                      : `${colors.background.elevated} ${colors.text.secondary} ${colors.interactive.hover}`
                   }`}
                 >
                   {label} ({count})
@@ -263,7 +276,7 @@ const FilterSearchBar = ({
           {hasActiveFilters && (
             <button
               onClick={resetFilters}
-              className="w-full p-2 bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors"
+              className={`w-full p-2 ${colors.background.elevated} ${colors.interactive.hover} ${colors.text.secondary} rounded-lg text-sm font-medium transition-colors`}
             >
               Clear All Filters
             </button>

@@ -3,14 +3,16 @@ import cloudinaryService from "../../services/cloudinaryService";
 import ErrorMessage from "../indicators/ErrorMessage";
 import Button from "../common/Button";
 import { X, Camera, Eye } from "lucide-react";
+import { useTheme } from "../../contexts/ThemeContext";
 
 const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
+  const { colors, isDarkMode } = useTheme();
   const [uploading, setUploading] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState("");
   const [error, setError] = useState("");
-  const [showPreview, setShowPreview] = useState(false); // NEW: Preview modal state
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -18,7 +20,7 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
       setSelectedFile(null);
       setPreview("");
       setError("");
-      setShowPreview(false); // NEW: Reset preview state
+      setShowPreview(false);
     }
   }, [open]);
 
@@ -98,17 +100,28 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
 
   if (!open) return null;
 
+  // Theme-aware styles
+  const inputClasses = `w-full pl-8 pr-4 py-3 ${colors.background.elevated} ${colors.border.primary} rounded-xl ${colors.text.primary} focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200`;
+  const placeholderClasses = isDarkMode
+    ? "placeholder-slate-400"
+    : "placeholder-gray-500";
+  const dropzoneClasses = `border-2 border-dashed ${colors.border.secondary} rounded-xl p-6 text-center ${colors.interactive.hover} transition-all duration-200`;
+
   return (
     <>
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-200">
-        <div className="bg-slate-800/95 backdrop-blur-xl border-t border-slate-600/50 sm:border sm:border-slate-600/50 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-4 duration-300">
-          <div className="flex items-center justify-between p-6 border-b border-slate-600/30">
-            <h2 className="text-xl font-bold text-white">
+        <div
+          className={`${colors.background.card} backdrop-blur-xl border-t ${colors.border.primary} sm:border ${colors.border.primary} rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-4 duration-300 shadow-2xl`}
+        >
+          <div
+            className={`flex items-center justify-between p-6 border-b ${colors.border.secondary}`}
+          >
+            <h2 className={`text-xl font-bold ${colors.text.primary}`}>
               Upload Proof of Payment
             </h2>
             <button
               onClick={onClose}
-              className="w-10 h-10 rounded-full bg-slate-700/50 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all duration-200"
+              className={`w-10 h-10 rounded-full ${colors.background.elevated} ${colors.interactive.hover} flex items-center justify-center ${colors.text.tertiary} hover:${colors.text.secondary} transition-all duration-200`}
             >
               <X className="w-5 h-5" />
             </button>
@@ -118,12 +131,16 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
             <ErrorMessage error={error} onClose={() => setError("")} />
 
             <div>
-              <label className="block text-slate-300 text-sm font-medium mb-2">
+              <label
+                className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+              >
                 Payment Amount (Max: ₱
                 {(loan?.remainingAmount || 0).toLocaleString()})
               </label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
+                <span
+                  className={`absolute left-4 top-1/2 transform -translate-y-1/2 ${colors.text.tertiary}`}
+                >
                   ₱
                 </span>
                 <input
@@ -133,7 +150,7 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
                     setPaymentAmount(e.target.value);
                     if (error) setError("");
                   }}
-                  className="w-full pl-8 pr-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200"
+                  className={`${inputClasses} ${placeholderClasses}`}
                   placeholder="0.00"
                   min="0"
                   max={loan?.remainingAmount || 0}
@@ -144,10 +161,12 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
             </div>
 
             <div>
-              <label className="block text-slate-300 text-sm font-medium mb-2">
+              <label
+                className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
+              >
                 Upload Proof
               </label>
-              <div className="border-2 border-dashed border-slate-600/50 rounded-xl p-6 text-center">
+              <div className={dropzoneClasses}>
                 <input
                   type="file"
                   accept="image/*"
@@ -164,7 +183,7 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
                         alt="Preview"
                         className="w-32 h-32 object-cover rounded-lg mx-auto mb-3"
                       />
-                      {/* NEW: Preview button */}
+                      {/* Preview button */}
                       <button
                         type="button"
                         onClick={() => setShowPreview(true)}
@@ -176,14 +195,22 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
                     </div>
                   ) : (
                     <>
-                      <Camera className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                      <p className="text-slate-400 text-sm">
+                      <Camera
+                        className={`w-12 h-12 ${colors.text.tertiary} mx-auto mb-3`}
+                      />
+                      <p className={`${colors.text.tertiary} text-sm`}>
                         Click to select image
                       </p>
                     </>
                   )}
                 </label>
               </div>
+              {selectedFile && (
+                <p className={`text-xs ${colors.text.muted} mt-2`}>
+                  Selected: {selectedFile.name} (
+                  {(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                </p>
+              )}
             </div>
 
             <div className="flex gap-3">
@@ -209,14 +236,14 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
         </div>
       </div>
 
-      {/* NEW: Image Preview Modal */}
+      {/* Image Preview Modal */}
       {showPreview && preview && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[60] animate-in fade-in duration-200">
           <div className="relative max-w-4xl max-h-[90vh] m-4">
             <img
               src={preview}
               alt="Preview"
-              className="max-w-full max-h-full object-contain rounded-lg"
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
             />
             <button
               onClick={() => setShowPreview(false)}
@@ -224,6 +251,15 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
             >
               <X className="w-5 h-5" />
             </button>
+            <div className="absolute bottom-4 left-4 bg-black/60 rounded-lg px-3 py-2">
+              <p className="text-white text-sm font-medium">
+                {selectedFile?.name}
+              </p>
+              <p className="text-gray-300 text-xs">
+                {selectedFile && (selectedFile.size / 1024 / 1024).toFixed(2)}{" "}
+                MB
+              </p>
+            </div>
           </div>
         </div>
       )}

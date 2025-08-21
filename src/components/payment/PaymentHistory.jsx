@@ -8,13 +8,15 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { useTheme } from "../../contexts/ThemeContext";
 
 const PaymentHistory = ({ payments = {}, loan, onDeletePayment }) => {
+  const { colors } = useTheme();
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); // ADD this
-  const [paymentToDelete, setPaymentToDelete] = useState(null); // ADD this
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState(null);
 
   const paymentsArray = useMemo(() => {
     if (!payments || typeof payments !== "object") {
@@ -42,13 +44,11 @@ const PaymentHistory = ({ payments = {}, loan, onDeletePayment }) => {
     setShowReceiptModal(true);
   };
 
-  // MODIFY this function to show confirmation modal instead of direct deletion
   const handleDeleteReceipt = async (payment) => {
     setPaymentToDelete(payment);
     setShowDeleteConfirm(true);
   };
 
-  // ADD this new function to handle confirmed deletion
   const handleConfirmDelete = async () => {
     try {
       if (onDeletePayment && paymentToDelete) {
@@ -66,7 +66,9 @@ const PaymentHistory = ({ payments = {}, loan, onDeletePayment }) => {
   if (!paymentsArray.length) {
     return (
       <div className="text-center py-4">
-        <p className="text-slate-400 text-sm">No payments recorded yet</p>
+        <p className={`${colors.text.tertiary} text-sm`}>
+          No payments recorded yet
+        </p>
       </div>
     );
   }
@@ -76,18 +78,18 @@ const PaymentHistory = ({ payments = {}, loan, onDeletePayment }) => {
       <div className="space-y-2">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="w-full flex items-center justify-between p-2 bg-slate-700/20 hover:bg-slate-700/30 rounded-lg transition-colors duration-200"
+          className={`w-full flex items-center justify-between p-2 ${colors.background.elevated} ${colors.interactive.hover} rounded-lg transition-colors duration-200`}
         >
           <div className="flex items-center gap-2">
-            <History className="w-4 h-4 text-slate-300" />
-            <span className="text-slate-200 font-medium text-sm">
+            <History className={`w-4 h-4 ${colors.text.secondary}`} />
+            <span className={`${colors.text.primary} font-medium text-sm`}>
               Payment History ({paymentsArray.length})
             </span>
           </div>
           {isExpanded ? (
-            <ChevronUp className="w-4 h-4 text-slate-400" />
+            <ChevronUp className={`w-4 h-4 ${colors.text.tertiary}`} />
           ) : (
-            <ChevronDown className="w-4 h-4 text-slate-400" />
+            <ChevronDown className={`w-4 h-4 ${colors.text.tertiary}`} />
           )}
         </button>
 
@@ -96,14 +98,14 @@ const PaymentHistory = ({ payments = {}, loan, onDeletePayment }) => {
             {paymentsArray.map((payment, index) => (
               <div
                 key={payment.id || index}
-                className="bg-slate-700/30 rounded-lg p-3"
+                className={`${colors.background.elevated} rounded-lg p-3`}
               >
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-emerald-300 font-semibold text-sm">
+                  <span className="text-emerald-400 font-semibold text-sm">
                     ₱{(payment.amount || 0).toLocaleString()}
                   </span>
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-400 text-xs">
+                    <span className={`${colors.text.tertiary} text-xs`}>
                       {payment.timestamp
                         ? new Date(payment.timestamp).toLocaleDateString()
                         : "Unknown"}
@@ -162,7 +164,7 @@ const PaymentHistory = ({ payments = {}, loan, onDeletePayment }) => {
         }}
       />
 
-      {/* ADD Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal */}
       <ConfirmationModal
         open={showDeleteConfirm}
         onClose={() => {

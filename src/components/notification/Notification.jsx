@@ -1,13 +1,16 @@
 import React, { useEffect } from "react";
 import { AlertTriangle, Check, X } from "lucide-react";
+import { useTheme } from "../../contexts/ThemeContext";
 
 const Notification = ({ message, type, onClose }) => {
-  useEffect(() => {
-    if (!message) return; // ADD this check
+  const { colors, isDarkMode } = useTheme();
 
-    console.log("Notification mounted:", message, type); // ADD this line
+  useEffect(() => {
+    if (!message) return;
+
+    console.log("Notification mounted:", message, type);
     const timer = setTimeout(() => {
-      console.log("Auto-closing notification"); // ADD this line
+      console.log("Auto-closing notification");
       onClose();
     }, 5000);
     return () => clearTimeout(timer);
@@ -15,6 +18,7 @@ const Notification = ({ message, type, onClose }) => {
 
   if (!message) return null;
 
+  // Theme-aware notification configs
   const config = {
     error: {
       bg: "bg-red-500/10",
@@ -34,9 +38,14 @@ const Notification = ({ message, type, onClose }) => {
 
   const { bg, border, text, iconBg, Icon } = config[type] || config.success;
 
+  // Enhanced backdrop blur based on theme
+  const backdropClasses = isDarkMode
+    ? `${colors.background.card} backdrop-blur-xl`
+    : `${colors.background.card} backdrop-blur-xl`;
+
   return (
     <div
-      className={`fixed top-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:transform sm:-translate-x-1/2 ${bg} ${border} backdrop-blur-xl border px-4 py-4 rounded-2xl shadow-lg z-50 max-w-md mx-auto animate-in slide-in-from-top-4 duration-300`}
+      className={`fixed top-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:transform sm:-translate-x-1/2 ${bg} ${border} ${backdropClasses} border px-4 py-4 rounded-2xl shadow-2xl z-50 max-w-md mx-auto animate-in slide-in-from-top-4 duration-300`}
     >
       <div className="flex items-center gap-3">
         <div
@@ -47,7 +56,7 @@ const Notification = ({ message, type, onClose }) => {
         <span className={`flex-1 text-sm font-medium ${text}`}>{message}</span>
         <button
           onClick={onClose}
-          className={`${text} hover:opacity-70 transition-opacity`}
+          className={`${text} hover:opacity-70 transition-opacity p-1 rounded-md ${colors.interactive.hover}`}
         >
           <X className="w-4 h-4" />
         </button>

@@ -11,10 +11,12 @@ import {
   updateBreakdownPayments,
   calculateEarlySettlement,
 } from "../../utils/loanCalculations";
+import { useTheme } from "../../contexts/ThemeContext";
 
 const MonthlyBreakdown = ({ loan }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showEarlySettlement, setShowEarlySettlement] = useState(false);
+  const { colors } = useTheme();
 
   const updatedBreakdown = useMemo(() => {
     if (!loan.monthlyBreakdown) return null;
@@ -64,20 +66,20 @@ const MonthlyBreakdown = ({ loan }) => {
     <div className="space-y-2">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-3 bg-slate-700/20 hover:bg-slate-700/30 rounded-lg transition-colors duration-200"
+        className={`w-full flex items-center justify-between p-3 ${colors.background.elevated} ${colors.interactive.hover} rounded-lg transition-colors duration-200 ${colors.border.primary} border`}
       >
         <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-slate-300" />
-          <span className="text-slate-200 font-medium text-sm">
+          <Calendar className={`w-4 h-4 ${colors.text.secondary}`} />
+          <span className={`${colors.text.primary} font-medium text-sm`}>
             {loan.interestRate === 0
               ? `Payment Plan - Interest Free (${paidMonths}/${totalMonths} paid)`
               : `GLoan Payment Formula (${paidMonths}/${totalMonths} paid)`}
           </span>
         </div>
         {isExpanded ? (
-          <ChevronUp className="w-4 h-4 text-slate-400" />
+          <ChevronUp className={`w-4 h-4 ${colors.text.tertiary}`} />
         ) : (
-          <ChevronDown className="w-4 h-4 text-slate-400" />
+          <ChevronDown className={`w-4 h-4 ${colors.text.tertiary}`} />
         )}
       </button>
 
@@ -85,7 +87,9 @@ const MonthlyBreakdown = ({ loan }) => {
         <div className="space-y-2 max-h-64 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
           {/* GLoan Formula Info */}
           {isGLoan && (
-            <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 mb-3">
+            <div
+              className={`p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 mb-3`}
+            >
               <div className="flex items-center gap-2 mb-2">
                 <Calculator className="w-4 h-4 text-blue-400" />
                 <span className="text-blue-400 font-medium text-sm">
@@ -93,7 +97,7 @@ const MonthlyBreakdown = ({ loan }) => {
                 </span>
               </div>
               <div className="text-xs space-y-1">
-                <div className="text-slate-300">
+                <div className={colors.text.secondary}>
                   Installment = (₱{loan.amount.toLocaleString()} + ₱
                   {(
                     loan.amount *
@@ -102,11 +106,11 @@ const MonthlyBreakdown = ({ loan }) => {
                   ).toLocaleString()}
                   ) ÷ {totalMonths} months
                 </div>
-                <div className="text-slate-400">
+                <div className={colors.text.tertiary}>
                   Processing Fee: 3% = ₱{(loan.amount * 0.03).toLocaleString()}{" "}
                   deducted upfront
                 </div>
-                <div className="text-slate-400">
+                <div className={colors.text.tertiary}>
                   Net Proceeds: ₱{(loan.amount * 0.97).toLocaleString()}
                 </div>
               </div>
@@ -135,14 +139,22 @@ const MonthlyBreakdown = ({ loan }) => {
               {showEarlySettlement && (
                 <div className="mt-2 space-y-2 text-xs animate-in slide-in-from-top-2 duration-200">
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-slate-700/30 rounded p-2 text-center">
-                      <div className="text-slate-400">Remaining Principal</div>
-                      <div className="text-white font-semibold">
+                    <div
+                      className={`${colors.background.elevated} rounded p-2 text-center`}
+                    >
+                      <div className={colors.text.tertiary}>
+                        Remaining Principal
+                      </div>
+                      <div className={`${colors.text.primary} font-semibold`}>
                         ₱{earlySettlement.remainingPrincipal.toLocaleString()}
                       </div>
                     </div>
-                    <div className="bg-slate-700/30 rounded p-2 text-center">
-                      <div className="text-slate-400">Prorated Interest</div>
+                    <div
+                      className={`${colors.background.elevated} rounded p-2 text-center`}
+                    >
+                      <div className={colors.text.tertiary}>
+                        Prorated Interest
+                      </div>
                       <div className="text-amber-400 font-semibold">
                         ₱{earlySettlement.proratedInterest.toLocaleString()}
                       </div>
@@ -162,7 +174,7 @@ const MonthlyBreakdown = ({ loan }) => {
                       ₱{earlySettlement.savedInterest.toLocaleString()}
                     </div>
                   </div>
-                  <div className="text-slate-400 text-center">
+                  <div className={`${colors.text.tertiary} text-center`}>
                     Formula: Principal + (Principal × Rate × Days/30)
                   </div>
                 </div>
@@ -179,12 +191,14 @@ const MonthlyBreakdown = ({ loan }) => {
                   ? "bg-emerald-500/10 border-emerald-500/30"
                   : month.paidAmount > 0
                   ? "bg-amber-500/10 border-amber-500/30"
-                  : "bg-slate-700/20 border-slate-600/30"
+                  : `${colors.background.elevated} ${colors.border.primary}`
               }`}
             >
               <div className="flex justify-between items-start mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-white font-medium text-sm">
+                  <span
+                    className={`${colors.text.primary} font-medium text-sm`}
+                  >
                     Month {month.month}
                   </span>
                   {month.isPaid ? (
@@ -198,35 +212,35 @@ const MonthlyBreakdown = ({ loan }) => {
                     </span>
                   )}
                 </div>
-                <span className="text-slate-400 text-xs">
+                <span className={`${colors.text.tertiary} text-xs`}>
                   Due: {new Date(month.dueDate).toLocaleDateString()}
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <span className="text-slate-400">Principal: </span>
-                  <span className="text-white">
+                  <span className={colors.text.tertiary}>Principal: </span>
+                  <span className={colors.text.primary}>
                     ₱{month.principalAmount.toLocaleString()}
                   </span>
                 </div>
                 {month.interestAmount > 0 && (
                   <div>
-                    <span className="text-slate-400">Interest: </span>
-                    <span className="text-white">
+                    <span className={colors.text.tertiary}>Interest: </span>
+                    <span className={colors.text.primary}>
                       ₱{month.interestAmount.toLocaleString()}
                     </span>
                   </div>
                 )}
                 <div className={month.interestAmount === 0 ? "col-span-2" : ""}>
-                  <span className="text-slate-400">
+                  <span className={colors.text.tertiary}>
                     {month.isLastPayment
                       ? "Final Payment: "
                       : isGLoan
                       ? "Payment Due: "
                       : "Amount Due: "}
                   </span>
-                  <span className="text-white font-semibold">
+                  <span className={`${colors.text.primary} font-semibold`}>
                     ₱{month.totalAmount.toLocaleString()}
                   </span>
                   {/* Show clear message for final payment */}
@@ -244,14 +258,14 @@ const MonthlyBreakdown = ({ loan }) => {
                   )}
                 </div>
                 <div>
-                  <span className="text-slate-400">Paid: </span>
+                  <span className={colors.text.tertiary}>Paid: </span>
                   <span
                     className={`font-semibold ${
                       month.isPaid
                         ? "text-emerald-400"
                         : month.paidAmount > 0
                         ? "text-amber-400"
-                        : "text-slate-400"
+                        : colors.text.tertiary
                     }`}
                   >
                     ₱{month.paidAmount.toLocaleString()}
@@ -259,8 +273,12 @@ const MonthlyBreakdown = ({ loan }) => {
                 </div>
                 {/* Add remaining balance display for GLoan */}
                 {isGLoan && month.remainingBalance !== undefined && (
-                  <div className="col-span-2 mt-1 pt-1 border-t border-slate-600/30">
-                    <span className="text-slate-400">Remaining Balance: </span>
+                  <div
+                    className={`col-span-2 mt-1 pt-1 border-t ${colors.border.secondary}`}
+                  >
+                    <span className={colors.text.tertiary}>
+                      Remaining Balance:{" "}
+                    </span>
                     <span className="text-blue-400 font-medium">
                       ₱{month.remainingBalance.toLocaleString()}
                     </span>
@@ -274,7 +292,7 @@ const MonthlyBreakdown = ({ loan }) => {
                   <div className="text-blue-400 font-medium mb-1">
                     Early Settlement Option:
                   </div>
-                  <div className="text-slate-300">
+                  <div className={colors.text.secondary}>
                     If settled early, interest will be prorated based on days
                     elapsed in this month
                   </div>
@@ -291,8 +309,12 @@ const MonthlyBreakdown = ({ loan }) => {
 
           {/* Summary Footer */}
           {isGLoan && (
-            <div className="mt-3 p-3 bg-slate-700/10 rounded-lg">
-              <div className="text-xs text-slate-400 text-center space-y-1">
+            <div
+              className={`mt-3 p-3 ${colors.background.secondary} rounded-lg`}
+            >
+              <div
+                className={`text-xs ${colors.text.tertiary} text-center space-y-1`}
+              >
                 <div>GLoan Flat Add-on Interest Method</div>
                 <div>
                   Interest calculated upfront:{" "}

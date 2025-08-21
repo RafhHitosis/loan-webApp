@@ -12,6 +12,7 @@ import Notification from "../components/notification/Notification";
 import FilterSearchBar from "../components/filter/FilterSearchBar";
 import AppHeader from "../components/header/AppHeader";
 import BottomNavigation from "../components/navigation/BottomNavigation";
+import { useTheme } from "../contexts/ThemeContext";
 
 // Custom Hooks
 import { useNotification } from "../hooks/useNotification";
@@ -22,6 +23,7 @@ import { useScrollOperations } from "../hooks/useScrollOperations";
 
 const LoanTrackerApp = () => {
   const { user, signOut } = useAuth();
+  const { colors } = useTheme();
   const [currentView, setCurrentView] = useState("dashboard");
 
   // Custom hooks
@@ -180,7 +182,7 @@ const LoanTrackerApp = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className={`min-h-screen ${colors.background.primary}`}>
       {/* Header */}
       <AppHeader user={user} onLogout={openLogoutConfirm} />
 
