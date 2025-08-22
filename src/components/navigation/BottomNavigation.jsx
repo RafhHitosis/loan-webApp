@@ -1,5 +1,5 @@
 import React from "react";
-import { Home, List } from "lucide-react";
+import { Home, List, User } from "lucide-react";
 import NavigationButton from "./NavigationButton";
 import { useTheme } from "../../contexts/ThemeContext";
 
@@ -13,7 +13,7 @@ const BottomNavigation = ({ currentView, onViewChange }) => {
       {/* Subtle top glow line */}
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent"></div>
 
-      <div className="grid grid-cols-2 gap-1 p-2">
+      <div className="grid grid-cols-3 gap-1 p-2">
         <NavigationButton
           view="dashboard"
           icon={Home}
@@ -28,6 +28,13 @@ const BottomNavigation = ({ currentView, onViewChange }) => {
           isActive={currentView === "loans"}
           onViewChange={onViewChange}
         />
+        <NavigationButton
+          view="profile"
+          icon={User}
+          label="Profile"
+          isActive={currentView === "profile"}
+          onViewChange={onViewChange}
+        />
       </div>
 
       {/* Animated sliding indicator */}
@@ -35,8 +42,10 @@ const BottomNavigation = ({ currentView, onViewChange }) => {
         <div
           className={`h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-transform duration-500 ease-out ${
             currentView === "dashboard"
-              ? "transform translate-x-0 w-1/2"
-              : "transform translate-x-full w-1/2"
+              ? "transform translate-x-0 w-1/3"
+              : currentView === "loans"
+              ? "transform translate-x-full w-1/3"
+              : "transform translate-x-[200%] w-1/3"
           }`}
         ></div>
       </div>

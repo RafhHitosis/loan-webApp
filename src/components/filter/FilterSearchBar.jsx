@@ -1,6 +1,16 @@
 import { useState, useMemo } from "react";
-import { Plus, Search, Filter, X } from "lucide-react";
-import { useTheme } from "../../contexts/ThemeContext"; // Update the import path
+import {
+  Plus,
+  Search,
+  Filter,
+  X,
+  Download,
+  Loader2,
+  FileText,
+} from "lucide-react";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useAuth } from "../../contexts/AuthContext";
+import { exportLoansToPDF } from "../../utils/pdfExport";
 
 const FilterSearchBar = ({
   searchQuery,
@@ -9,10 +19,14 @@ const FilterSearchBar = ({
   setFilters,
   loans,
   onAddLoan,
+  onExportSuccess,
+  onExportError,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const { colors } = useTheme();
+  const { user } = useAuth();
 
   // Calculate filter counts
   const filterCounts = useMemo(() => {
@@ -56,6 +70,35 @@ const FilterSearchBar = ({
     };
   }, [loans]);
 
+  const handleExportToPDF = async () => {
+    if (!loans || loans.length === 0) {
+      if (onExportError) {
+        onExportError(new Error("No loans available to export"));
+      }
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      // Small delay to show loading state
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      const result = await exportLoansToPDF(loans, colors.isDarkMode, user);
+
+      if (result.success && onExportSuccess) {
+        onExportSuccess(result.fileName);
+      }
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      if (onExportError) {
+        onExportError(error);
+      }
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // Only show filter bar if there are loans
   if (!loans || loans.length === 0) {
     // Show only the Add Loan button when there are no loans
@@ -83,7 +126,7 @@ const FilterSearchBar = ({
 
   return (
     <div className="mb-4 space-y-3" style={{ marginTop: "-8px" }}>
-      {/* Top Bar with Icons and Add Button */}
+      {/* Top Bar with Icons and Buttons */}
       <div className="flex items-center gap-2">
         {/* Search Toggle */}
         <button
@@ -131,8 +174,33 @@ const FilterSearchBar = ({
           </div>
         )}
 
-        {/* ADD LOAN BUTTON - Positioned at the far right */}
-        <div className="ml-auto">
+        {/* EXPORT BUTTON - Added before Add Loan button */}
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={handleExportToPDF}
+            disabled={isExporting || loans.length === 0}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl ${
+              isExporting || loans.length === 0
+                ? `${colors.background.elevated} ${colors.text.tertiary} cursor-not-allowed`
+                : `bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white`
+            }`}
+            title={
+              loans.length === 0
+                ? "No loans to export"
+                : "Export all loans to PDF"
+            }
+          >
+            {isExporting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            <span className="hidden sm:inline">
+              {isExporting ? "Exporting..." : "Export"}
+            </span>
+          </button>
+
+          {/* ADD LOAN BUTTON - Positioned at the far right */}
           <button
             onClick={onAddLoan}
             className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 active:scale-95 font-medium"

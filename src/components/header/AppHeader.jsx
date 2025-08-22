@@ -31,7 +31,7 @@ const AppHeader = ({ user, onLogout }) => {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle
-              className={`w-10 h-10 rounded-xl ${colors.background.elevated} ${colors.interactive.hover} ${colors.text.secondary} hover:text-emerald-400 transition-all duration-200 flex items-center justify-center`}
+              className={`w-10 h-10 rounded-xl ${colors.background.elevated} ${colors.interactive.hover} ${colors.text.secondary} transition-all duration-200 flex items-center justify-center border ${colors.border.primary} shadow-sm`}
             />
             <button
               onClick={onLogout}

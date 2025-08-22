@@ -41,7 +41,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
         status: loan.status || "active",
       };
       setFormData(loanData);
-      setOriginalData(loanData);
+      setOriginalData({ ...loanData, interestRate: loan.interestRate || 0.05 });
       // Set interest rate from existing loan
       setInterestRate(loan.interestRate || 0.05);
     } else {
@@ -55,15 +55,18 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
         status: "active",
       };
       setFormData(newLoanData);
-      setOriginalData(newLoanData);
+      setOriginalData({ ...newLoanData, interestRate: 0.05 });
+      // Reset to default interest rate for new loans
+      setInterestRate(0.05);
     }
     setError("");
     setHasUnsavedChanges(false);
   }, [loan, open]);
 
-  const checkForChanges = (newData) => {
+  const checkForChanges = (newData, newInterestRate = interestRate) => {
     if (!originalData) return false;
-    return JSON.stringify(newData) !== JSON.stringify(originalData);
+    const currentState = { ...newData, interestRate: newInterestRate };
+    return JSON.stringify(currentState) !== JSON.stringify(originalData);
   };
 
   const handleSubmit = async (e) => {
@@ -116,13 +119,14 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
       const totalAmountWithInterest =
         monthlyBreakdown?.totalAmount || principalAmount;
 
-      const result = await onSave({
+      const loanDataToSave = {
         ...formData,
         // Save the total amount with interest as the main loan amount
         amount: totalAmountWithInterest,
         // Keep track of the original principal for reference
         originalPrincipal: principalAmount,
         id: loan?.id || null,
+        // IMPORTANT: Save the selected interest rate
         interestRate: interestRate,
         monthlyBreakdown: monthlyBreakdown?.monthlyBreakdown || null,
         totalInterest: monthlyBreakdown?.totalInterest || 0,
@@ -130,7 +134,11 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
         // Additional GLoan specific fields
         processingFee: monthlyBreakdown?.processingFee || 0,
         netProceeds: monthlyBreakdown?.netProceeds || principalAmount,
-      });
+      };
+
+      console.log("Saving loan with interest rate:", interestRate); // Debug log
+
+      const result = await onSave(loanDataToSave);
 
       if (result && result.success) {
         setHasUnsavedChanges(false);
@@ -149,6 +157,12 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
     const newData = { ...formData, [field]: value };
     setFormData(newData);
     setHasUnsavedChanges(checkForChanges(newData));
+    if (error) setError("");
+  };
+
+  const updateInterestRate = (newRate) => {
+    setInterestRate(newRate);
+    setHasUnsavedChanges(checkForChanges(formData, newRate));
     if (error) setError("");
   };
 
@@ -349,7 +363,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                     <button
                       key={option.rate}
                       type="button"
-                      onClick={() => setInterestRate(option.rate)}
+                      onClick={() => updateInterestRate(option.rate)}
                       className={`p-3 rounded-xl text-center transition-all duration-200 ${
                         Math.abs(interestRate - option.rate) < 0.0001
                           ? `${option.color} text-white shadow-lg`
@@ -384,7 +398,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                         }
                         onChange={(e) => {
                           const value = parseFloat(e.target.value) || 0;
-                          setInterestRate(value / 100);
+                          updateInterestRate(value / 100);
                         }}
                         className={`w-20 px-2 py-1 ${colors.background.elevated} border ${colors.border.primary} rounded-lg ${colors.text.primary} text-sm text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50`}
                         step="0.01"
@@ -405,7 +419,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                     step="0.01"
                     value={interestRate * 100}
                     onChange={(e) =>
-                      setInterestRate(parseFloat(e.target.value) / 100)
+                      updateInterestRate(parseFloat(e.target.value) / 100)
                     }
                     className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
                     style={{
@@ -654,6 +668,15 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                               </span>
                             </div>
                           )}
+
+                          {/* Interest Rate Confirmation */}
+                          <div className="text-center">
+                            <span className="text-emerald-400 text-xs font-medium">
+                              📊 Interest Rate:{" "}
+                              {(interestRate * 100).toFixed(2)}% monthly will be
+                              saved
+                            </span>
+                          </div>
                         </div>
                       ) : null;
                     })()}

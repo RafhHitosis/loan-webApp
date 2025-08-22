@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import LoginForm from "./auth/LoginForm";
 import { useAuth } from "./../contexts/AuthContext";
 import Dashboard from "../components/Dashboard/Dashboard";
+import Profile from "../components/profile/Profile";
 import ConfirmationModal from "../components/modal/ConfirmationModal";
 import ManualReceiptModal from "../components/modal/ManualReceiptModal";
 import ProofUploadModal from "../components/modal/ProofUploadModal";
@@ -21,10 +22,109 @@ import { useLoansData } from "../hooks/useLoansData";
 import { useLoanOperations } from "../hooks/useLoanOperations";
 import { useScrollOperations } from "../hooks/useScrollOperations";
 
+// Simplified and optimized swipe navigation hook
+const useSwipeNavigation = (currentView, setCurrentView) => {
+  const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
+  const swipeContainerRef = useRef(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [animationClass, setAnimationClass] = useState("");
+
+  // Define the page order for navigation
+  const pageOrder = ["dashboard", "loans", "profile"];
+
+  const handleTouchStart = (e) => {
+    if (e.touches.length !== 1 || isAnimating) return;
+
+    const touch = e.touches[0];
+    touchStartX.current = touch.clientX;
+    touchStartY.current = touch.clientY;
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!touchStartX.current || !touchStartY.current || isAnimating) return;
+    if (e.changedTouches.length !== 1) return;
+
+    const touch = e.changedTouches[0];
+    const deltaX = touch.clientX - touchStartX.current;
+    const deltaY = touch.clientY - touchStartY.current;
+
+    // Reset touch coordinates
+    touchStartX.current = null;
+    touchStartY.current = null;
+
+    // Check if it's a valid horizontal swipe
+    const minSwipeDistance = 50;
+    const maxVerticalDistance = 80;
+
+    if (
+      Math.abs(deltaX) > minSwipeDistance &&
+      Math.abs(deltaY) < maxVerticalDistance &&
+      Math.abs(deltaX) > Math.abs(deltaY)
+    ) {
+      const currentIndex = pageOrder.indexOf(currentView);
+      let targetIndex = currentIndex;
+
+      if (deltaX > 0 && currentIndex > 0) {
+        // Swipe right - go to previous page
+        targetIndex = currentIndex - 1;
+      } else if (deltaX < 0 && currentIndex < pageOrder.length - 1) {
+        // Swipe left - go to next page
+        targetIndex = currentIndex + 1;
+      }
+
+      if (targetIndex !== currentIndex) {
+        setIsAnimating(true);
+
+        // Set animation class based on swipe direction
+        if (deltaX > 0) {
+          // Swiped right - going to previous page
+          setAnimationClass("slide-right");
+        } else {
+          // Swiped left - going to next page
+          setAnimationClass("slide-left");
+        }
+
+        // Change view immediately
+        setCurrentView(pageOrder[targetIndex]);
+
+        // Clear animation after transition completes
+        setTimeout(() => {
+          setIsAnimating(false);
+          setAnimationClass("");
+        }, 300);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const container = swipeContainerRef.current;
+    if (!container) return;
+
+    container.addEventListener("touchstart", handleTouchStart, {
+      passive: true,
+    });
+    container.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+    return () => {
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [currentView, isAnimating]);
+
+  return { swipeContainerRef, isAnimating, animationClass };
+};
+
 const LoanTrackerApp = () => {
   const { user, signOut } = useAuth();
   const { colors } = useTheme();
   const [currentView, setCurrentView] = useState("dashboard");
+
+  // Simplified swipe navigation hook
+  const { swipeContainerRef, isAnimating, animationClass } = useSwipeNavigation(
+    currentView,
+    setCurrentView
+  );
 
   // Custom hooks
   const { notification, showNotification, clearNotification } =
@@ -78,11 +178,8 @@ const LoanTrackerApp = () => {
   // Auto-scroll to bottom on app load (mobile view)
   useEffect(() => {
     if (user) {
-      // Check if it's mobile view (you can adjust this breakpoint as needed)
       const isMobile = window.innerWidth <= 768;
-
       if (isMobile) {
-        // Small delay to ensure the DOM is fully rendered
         setTimeout(() => {
           window.scrollTo({
             top: document.body.scrollHeight,
@@ -91,7 +188,7 @@ const LoanTrackerApp = () => {
         }, 300);
       }
     }
-  }, [user]); // Trigger when user is loaded (app is ready)
+  }, [user]);
 
   // Event handlers
   const handleEditLoan = (loan) => {
@@ -148,8 +245,19 @@ const LoanTrackerApp = () => {
     const result = await handleSaveLoan(loanData);
     if (result.success) {
       handleLoanFormClose();
-      // After adding a loan when empty, navigate to loans list
       setCurrentView("loans");
+
+      if (loans.length === 0) {
+        showNotification(
+          "First loan added! You can now export comprehensive reports.",
+          "success"
+        );
+      } else {
+        showNotification(
+          "Loan saved successfully! Updated data available for export.",
+          "success"
+        );
+      }
     }
   };
 
@@ -158,6 +266,10 @@ const LoanTrackerApp = () => {
       const result = await handleDeleteLoan(loanToDelete.id);
       if (result.success) {
         handleDeleteConfirmClose();
+        showNotification(
+          "Loan deleted successfully! Export reflects current data.",
+          "success"
+        );
       }
     }
   };
@@ -166,6 +278,10 @@ const LoanTrackerApp = () => {
     const result = await handleProofUpload(paymentData);
     if (result.success) {
       handleProofUploadClose();
+      showNotification(
+        "Payment recorded! Export includes updated payment history.",
+        "success"
+      );
     }
   };
 
@@ -173,7 +289,24 @@ const LoanTrackerApp = () => {
     const result = await handleManualReceiptSave(receiptData);
     if (result.success) {
       handleManualReceiptClose();
+      showNotification(
+        "Payment recorded! Export includes updated payment history.",
+        "success"
+      );
     }
+  };
+
+  // Export success handler
+  const handleExportSuccess = (fileName) => {
+    showNotification(
+      `PDF report "${fileName}" downloaded successfully!`,
+      "success"
+    );
+  };
+
+  // Export error handler
+  const handleExportError = (error) => {
+    showNotification(`Export failed: ${error.message}`, "error");
   };
 
   // Show login form if no user
@@ -186,45 +319,60 @@ const LoanTrackerApp = () => {
       {/* Header */}
       <AppHeader user={user} onLogout={openLogoutConfirm} />
 
-      {/* Main Content */}
-      <main className="px-4 py-6 pb-24">
-        {currentView === "dashboard" && (
-          <Dashboard
-            loans={loans}
-            onAddLoan={() => {
-              setEditingLoan(null);
-              openLoanForm();
-            }}
-          />
-        )}
-        {currentView === "loans" && (
-          <div className="space-y-4">
-            <FilterSearchBar
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              filters={filters}
-              setFilters={setFilters}
+      {/* Main Content Container with Swipe Navigation */}
+      <div className="relative overflow-hidden">
+        <main
+          ref={swipeContainerRef}
+          className={`px-4 py-6 pb-24 ${isAnimating ? animationClass : ""}`}
+          style={{
+            touchAction: "pan-y",
+            overscrollBehavior: "contain",
+          }}
+        >
+          {currentView === "dashboard" && (
+            <Dashboard
               loans={loans}
               onAddLoan={() => {
                 setEditingLoan(null);
                 openLoanForm();
               }}
             />
-            <DueDateWarning loans={loans} onLoanClick={scrollToLoan} />
-            <LoanList
-              loans={filteredLoans}
-              onEdit={handleEditLoan}
-              onDelete={initiateDelete}
-              onUploadProof={handleUploadProof}
-              onAddManualReceipt={handleAddManualReceipt}
-              onDeletePayment={handleDeletePayment}
-              highlightedLoanId={highlightedLoanId}
-            />
-          </div>
-        )}
-      </main>
+          )}
 
-      {/* Bottom Navigation */}
+          {currentView === "loans" && (
+            <div className="space-y-4">
+              <FilterSearchBar
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                filters={filters}
+                setFilters={setFilters}
+                loans={loans}
+                filteredLoans={filteredLoans}
+                onAddLoan={() => {
+                  setEditingLoan(null);
+                  openLoanForm();
+                }}
+                onExportSuccess={handleExportSuccess}
+                onExportError={handleExportError}
+              />
+              <DueDateWarning loans={loans} onLoanClick={scrollToLoan} />
+              <LoanList
+                loans={filteredLoans}
+                onEdit={handleEditLoan}
+                onDelete={initiateDelete}
+                onUploadProof={handleUploadProof}
+                onAddManualReceipt={handleAddManualReceipt}
+                onDeletePayment={handleDeletePayment}
+                highlightedLoanId={highlightedLoanId}
+              />
+            </div>
+          )}
+
+          {currentView === "profile" && <Profile />}
+        </main>
+      </div>
+
+      {/* Bottom Navigation - Always visible */}
       <BottomNavigation
         currentView={currentView}
         onViewChange={setCurrentView}
