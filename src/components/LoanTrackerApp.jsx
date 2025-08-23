@@ -22,8 +22,8 @@ import { useLoansData } from "../hooks/useLoansData";
 import { useLoanOperations } from "../hooks/useLoanOperations";
 import { useScrollOperations } from "../hooks/useScrollOperations";
 
-// Simplified and optimized swipe navigation hook
-const useSwipeNavigation = (currentView, setCurrentView) => {
+// Simplified and optimized swipe navigation hook with modal awareness
+const useSwipeNavigation = (currentView, setCurrentView, isAnyModalOpen) => {
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
   const swipeContainerRef = useRef(null);
@@ -34,7 +34,8 @@ const useSwipeNavigation = (currentView, setCurrentView) => {
   const pageOrder = ["dashboard", "loans", "profile"];
 
   const handleTouchStart = (e) => {
-    if (e.touches.length !== 1 || isAnimating) return;
+    // Don't start swipe if any modal is open or already animating
+    if (e.touches.length !== 1 || isAnimating || isAnyModalOpen) return;
 
     const touch = e.touches[0];
     touchStartX.current = touch.clientX;
@@ -42,7 +43,14 @@ const useSwipeNavigation = (currentView, setCurrentView) => {
   };
 
   const handleTouchEnd = (e) => {
-    if (!touchStartX.current || !touchStartY.current || isAnimating) return;
+    // Don't process swipe if any modal is open
+    if (
+      !touchStartX.current ||
+      !touchStartY.current ||
+      isAnimating ||
+      isAnyModalOpen
+    )
+      return;
     if (e.changedTouches.length !== 1) return;
 
     const touch = e.changedTouches[0];
@@ -110,7 +118,7 @@ const useSwipeNavigation = (currentView, setCurrentView) => {
       container.removeEventListener("touchstart", handleTouchStart);
       container.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [currentView, isAnimating]);
+  }, [currentView, isAnimating, isAnyModalOpen]); // Added isAnyModalOpen to dependencies
 
   return { swipeContainerRef, isAnimating, animationClass };
 };
@@ -119,12 +127,6 @@ const LoanTrackerApp = () => {
   const { user, signOut } = useAuth();
   const { colors } = useTheme();
   const [currentView, setCurrentView] = useState("dashboard");
-
-  // Simplified swipe navigation hook
-  const { swipeContainerRef, isAnimating, animationClass } = useSwipeNavigation(
-    currentView,
-    setCurrentView
-  );
 
   // Custom hooks
   const { notification, showNotification, clearNotification } =
@@ -146,6 +148,25 @@ const LoanTrackerApp = () => {
     openLogoutConfirm,
     closeLogoutConfirm,
   } = useModalStates();
+
+  // State for tracking Profile component modals
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+
+  // Check if any modal is currently open
+  const isAnyModalOpen =
+    showLoanForm ||
+    showProofUpload ||
+    showManualReceipt ||
+    showDeleteConfirm ||
+    showLogoutConfirm ||
+    profileModalOpen;
+
+  // Swipe navigation hook with modal awareness
+  const { swipeContainerRef, isAnimating, animationClass } = useSwipeNavigation(
+    currentView,
+    setCurrentView,
+    isAnyModalOpen // Pass modal state to hook
+  );
 
   const {
     loans,
@@ -368,7 +389,9 @@ const LoanTrackerApp = () => {
             </div>
           )}
 
-          {currentView === "profile" && <Profile />}
+          {currentView === "profile" && (
+            <Profile onModalStateChange={setProfileModalOpen} />
+          )}
         </main>
       </div>
 

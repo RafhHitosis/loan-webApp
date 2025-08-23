@@ -1,4 +1,4 @@
-// PDF Export Utility with proper peso sign, accurate data, and payment method detection
+// PDF Export Utility with pastel colors, optimized spacing, and accurate data
 export const loadPDFLibrary = () => {
   return new Promise((resolve, reject) => {
     if (window.jspdf) {
@@ -193,34 +193,34 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
-    const margin = 20;
+    const margin = 15; // Reduced from 20
 
-    // Color scheme based on theme
+    // Pastel color scheme - lighter and more pleasant
     const colors = isDarkMode
       ? {
-          primary: [20, 33, 61],
-          secondary: [45, 55, 72],
-          accent: [16, 185, 129],
-          text: [255, 255, 255],
-          lightText: [203, 213, 225],
-          background: [30, 41, 59],
-          cardBg: [51, 65, 85],
-          danger: [239, 68, 68],
-          warning: [245, 158, 11],
+          primary: [88, 101, 142], // Soft navy blue
+          secondary: [108, 117, 125], // Soft gray
+          accent: [107, 203, 119], // Soft mint green
+          text: [248, 249, 250], // Very light gray
+          lightText: [173, 181, 189], // Light gray
+          background: [52, 58, 64], // Soft dark gray
+          cardBg: [73, 80, 87], // Medium gray
+          danger: [248, 144, 144], // Pastel red
+          warning: [255, 193, 119], // Pastel orange
         }
       : {
-          primary: [30, 58, 138],
-          secondary: [75, 85, 99],
-          accent: [5, 150, 105],
-          text: [17, 24, 39],
-          lightText: [107, 114, 128],
-          background: [255, 255, 255],
-          cardBg: [249, 250, 251],
-          danger: [220, 38, 38],
-          warning: [217, 119, 6],
+          primary: [147, 167, 209], // Soft periwinkle
+          secondary: [173, 181, 189], // Light gray
+          accent: [144, 238, 144], // Light green
+          text: [73, 80, 87], // Dark gray
+          lightText: [134, 142, 150], // Medium gray
+          background: [248, 249, 250], // Very light gray
+          cardBg: [233, 236, 239], // Light blue-gray
+          danger: [255, 182, 193], // Light pink
+          warning: [255, 218, 185], // Light peach
         };
 
-    let yPosition = 30;
+    let yPosition = 25; // Reduced from 30
 
     // Helper function to format peso amounts properly
     const formatPeso = (amount) => {
@@ -231,16 +231,15 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
       })}`;
     };
 
-    // Header Section
-    doc.setFillColor(...colors.primary);
-    doc.rect(0, 0, pageWidth, 50, "F");
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(28);
+    // Centered title
+    doc.setFontSize(24);
     doc.setFont("helvetica", "bold");
-    doc.text("Loan Tracker Report", margin, 25);
+    const titleText = "Loan Tracker Report";
+    const titleWidth = doc.getTextWidth(titleText);
+    doc.text(titleText, (pageWidth - titleWidth) / 2, 17);
 
-    doc.setFontSize(11);
+    // Centered date and user info
+    doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     const currentDate = new Date().toLocaleDateString("en-US", {
       year: "numeric",
@@ -249,23 +248,27 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
       hour: "2-digit",
       minute: "2-digit",
     });
-    doc.text(`Generated: ${currentDate}`, margin, 38);
+    const dateText = `Generated: ${currentDate}`;
+    const dateWidth = doc.getTextWidth(dateText);
+    doc.text(dateText, (pageWidth - dateWidth) / 2, 26);
+
     if (user?.email) {
-      doc.text(`User: ${user.email}`, margin, 45);
+      const userText = `User: ${user.email}`;
+      const userWidth = doc.getTextWidth(userText);
+      doc.text(userText, (pageWidth - userWidth) / 2, 31);
     }
 
-    yPosition = 70;
+    yPosition = 55;
 
-    // Enhanced Summary Statistics Section with payment method analytics
     doc.setTextColor(...colors.text);
-    doc.setFillColor(...colors.accent);
-    doc.rect(margin - 5, yPosition - 10, pageWidth - 2 * margin + 10, 15, "F");
+    doc.setFillColor(95, 203, 100);
+    doc.rect(margin - 3, yPosition - 8, pageWidth - 2 * margin + 6, 12, "F"); // Reduced height
 
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
+    doc.setFontSize(14); // Reduced from 16
     doc.setFont("helvetica", "bold");
     doc.text("Summary Statistics", margin, yPosition);
-    yPosition += 20;
+    yPosition += 15; // Reduced from 20
 
     // Calculate enhanced summary from actual loan data with accurate status detection
     const totalLoans = loans.length;
@@ -460,29 +463,31 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
       summaryData.push(["Preferred Method", preferredMethod]);
     }
 
-    // Create summary table
+    // Create compact summary table
     doc.autoTable({
       startY: yPosition,
       head: [["Metric", "Value"]],
       body: summaryData,
       theme: "grid",
       headStyles: {
-        fillColor: colors.accent,
+        fillColor: [95, 203, 100],
         textColor: [255, 255, 255],
         fontStyle: "bold",
-        fontSize: 10,
+        fontSize: 9, // Reduced from 10
       },
       bodyStyles: {
-        fillColor: isDarkMode ? [51, 65, 85] : [249, 250, 251],
+        fillColor: colors.cardBg,
         textColor: colors.text,
-        fontSize: 9,
+        fontSize: 8, // Reduced from 9
+        cellPadding: 2, // Reduced padding
       },
       alternateRowStyles: {
-        fillColor: isDarkMode ? [30, 41, 59] : [255, 255, 255],
+        fillColor: colors.background,
       },
       margin: { left: margin, right: margin },
       columnStyles: {
-        0: { fontStyle: "bold" },
+        0: { fontStyle: "bold", cellWidth: 50 }, // Fixed width for metric column
+        1: { cellWidth: "auto" }, // Auto width for value column
       },
       didParseCell: (data) => {
         // Style section headers and separators
@@ -495,7 +500,7 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
             data.cell.raw === "Payment Analytics" ||
             data.cell.raw === "Interest Analytics"
           ) {
-            data.cell.styles.fillColor = colors.accent;
+            data.cell.styles.fillColor = [95, 203, 100];
             data.cell.styles.textColor = [255, 255, 255];
             data.cell.styles.fontStyle = "bold";
           } else {
@@ -506,9 +511,9 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
       },
     });
 
-    yPosition = doc.lastAutoTable.finalY + 30;
+    yPosition = doc.lastAutoTable.finalY + 20; // Reduced from 30
 
-    // Due Date Alerts - Only if loans have due dates (using accurate status)
+    // Compact Due Date Alerts
     const loansWithDueDates = loansWithAccurateStatus.filter(
       (loan) => loan.dueDate && loan.actualStatus === "active"
     );
@@ -528,29 +533,23 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
 
     if (overdueLoans.length > 0 || dueSoonLoans.length > 0) {
       // Check if we need a new page with footer buffer
-      if (yPosition > pageHeight - 100) {
+      if (yPosition > pageHeight - 80) {
         doc.addPage();
-        yPosition = 30;
+        yPosition = 25;
       }
 
-      doc.setFillColor(239, 68, 68);
-      doc.rect(
-        margin - 5,
-        yPosition - 10,
-        pageWidth - 2 * margin + 10,
-        15,
-        "F"
-      );
+      doc.setFillColor(...colors.danger);
+      doc.rect(margin - 3, yPosition - 8, pageWidth - 2 * margin + 6, 12, "F");
 
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(14);
+      doc.setFontSize(12); // Reduced from 14
       doc.setFont("helvetica", "bold");
-      doc.text("Attention Required", margin, yPosition);
-      yPosition += 20;
+      doc.text("⚠ Attention Required", margin, yPosition);
+      yPosition += 15; // Reduced from 20
 
       if (overdueLoans.length > 0) {
-        doc.setTextColor(239, 68, 68);
-        doc.setFontSize(12);
+        doc.setTextColor(...colors.danger);
+        doc.setFontSize(10); // Reduced from 12
         doc.text(
           `${overdueLoans.length} Overdue Loan${
             overdueLoans.length > 1 ? "s" : ""
@@ -558,11 +557,11 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
           margin,
           yPosition
         );
-        yPosition += 10;
+        yPosition += 8; // Reduced from 10
 
         overdueLoans.forEach((loan) => {
           doc.setTextColor(...colors.text);
-          doc.setFontSize(10);
+          doc.setFontSize(8); // Reduced from 10
           const daysOverdue = Math.floor(
             (new Date() - new Date(loan.dueDate)) / (1000 * 60 * 60 * 24)
           );
@@ -570,23 +569,23 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
             `• ${loan.personName} - ${daysOverdue} days overdue (${formatPeso(
               loan.actualRemainingAmount
             )})`,
-            margin + 5,
+            margin + 3,
             yPosition
           );
-          yPosition += 8;
+          yPosition += 6; // Reduced from 8
         });
-        yPosition += 5;
+        yPosition += 3; // Reduced from 5
       }
 
       if (dueSoonLoans.length > 0) {
-        doc.setTextColor(245, 158, 11);
-        doc.setFontSize(12);
+        doc.setTextColor(...colors.warning);
+        doc.setFontSize(10); // Reduced from 12
         doc.text(`${dueSoonLoans.length} Due Soon:`, margin, yPosition);
-        yPosition += 10;
+        yPosition += 8; // Reduced from 10
 
         dueSoonLoans.forEach((loan) => {
           doc.setTextColor(...colors.text);
-          doc.setFontSize(10);
+          doc.setFontSize(8); // Reduced from 10
           const daysUntilDue = Math.ceil(
             (new Date(loan.dueDate) - new Date()) / (1000 * 60 * 60 * 24)
           );
@@ -594,59 +593,59 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
             `• ${loan.personName} - Due in ${daysUntilDue} day${
               daysUntilDue > 1 ? "s" : ""
             } (${formatPeso(loan.actualRemainingAmount)})`,
-            margin + 5,
+            margin + 3,
             yPosition
           );
-          yPosition += 8;
+          yPosition += 6; // Reduced from 8
         });
       }
-      yPosition += 20;
+      yPosition += 15; // Reduced from 20
     }
 
-    // Individual Loan Details Section
+    // Individual Loan Details Section with compact layout
     loansWithAccurateStatus.forEach((loan, index) => {
-      // Check if we need a new page with more space for footer (40px buffer)
-      if (yPosition > pageHeight - 140) {
+      // Check if we need a new page with more space for footer (30px buffer instead of 40)
+      if (yPosition > pageHeight - 100) {
         doc.addPage();
-        yPosition = 30;
+        yPosition = 25;
       }
 
-      // Loan header
-      doc.setFillColor(...colors.primary);
+      // Compact loan header
+      doc.setFillColor(80, 80, 80);
       doc.rect(
-        margin - 5,
-        yPosition - 12,
-        pageWidth - 2 * margin + 10,
-        25,
+        margin - 3,
+        yPosition - 8,
+        pageWidth - 2 * margin + 6,
+        18, // Reduced from 25
         "F"
       );
 
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(14);
+      doc.setFontSize(12); // Reduced from 14
       doc.setFont("helvetica", "bold");
       doc.text(`${index + 1}. ${loan.personName}`, margin, yPosition);
 
       // Status badge - use accurate status
       const statusColor =
-        loan.actualStatus === "active" ? colors.warning : colors.accent;
+        loan.actualStatus === "active" ? colors.warning : [95, 203, 100];
       doc.setTextColor(...statusColor);
-      doc.setFontSize(12);
+      doc.setFontSize(10); // Reduced from 12
       const statusText = `[${loan.actualStatus?.toUpperCase() || "UNKNOWN"}]`;
       const statusWidth = doc.getTextWidth(statusText);
       doc.text(statusText, pageWidth - margin - statusWidth, yPosition);
 
-      // Loan type
+      // Loan type - more compact
       doc.setTextColor(200, 200, 200);
-      doc.setFontSize(10);
+      doc.setFontSize(8); // Reduced from 10
       const typeText =
         loan.type === "lent"
           ? "Money Lent"
           : loan.type === "borrowed"
           ? "Money Borrowed"
           : "Unknown Type";
-      doc.text(typeText, margin, yPosition + 8);
+      doc.text(typeText, margin, yPosition + 6); // Reduced from 8
 
-      yPosition += 30;
+      yPosition += 22; // Reduced from 30
 
       // Calculate loan financials from accurate data
       const originalAmount = parseFloat(loan.amount || 0);
@@ -788,46 +787,48 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
         loanInfo.push(["Description", loan.description.trim()]);
       }
 
+      // Compact loan info table
       doc.autoTable({
         startY: yPosition,
         body: loanInfo,
         theme: "plain",
         bodyStyles: {
           textColor: colors.text,
-          fontSize: 9,
+          fontSize: 8, // Reduced from 9
+          cellPadding: 1.5, // Reduced padding
         },
         columnStyles: {
           0: {
             fontStyle: "bold",
-            fillColor: isDarkMode ? [51, 65, 85] : [249, 250, 251],
-            cellWidth: 40,
+            fillColor: colors.cardBg,
+            cellWidth: 35, // Reduced from 40
           },
           1: {
-            fillColor: isDarkMode ? [30, 41, 59] : [255, 255, 255],
+            fillColor: colors.background,
           },
         },
         margin: { left: margin, right: margin },
       });
 
-      yPosition = doc.lastAutoTable.finalY + 15;
+      yPosition = doc.lastAutoTable.finalY + 10; // Reduced from 15
 
-      // Monthly Breakdown Section - Only if it exists, with ACCURATE paid status
+      // Compact Monthly Breakdown Section
       if (
         loan.monthlyBreakdown &&
         Array.isArray(loan.monthlyBreakdown) &&
         loan.monthlyBreakdown.length > 0
       ) {
         // Check if we need a new page with footer buffer
-        if (yPosition > pageHeight - 120) {
+        if (yPosition > pageHeight - 90) {
           doc.addPage();
-          yPosition = 30;
+          yPosition = 25;
         }
 
         doc.setTextColor(...colors.text);
-        doc.setFontSize(12);
+        doc.setFontSize(10); // Reduced from 12
         doc.setFont("helvetica", "bold");
         doc.text("Monthly Payment Breakdown:", margin, yPosition);
-        yPosition += 12;
+        yPosition += 5; // Reduced from 12
 
         // Update breakdown with payments to show accurate status
         const updatedBreakdown = updateBreakdownPayments(
@@ -848,7 +849,7 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
           const interest = formatPeso(month.interestAmount || 0);
           const total = formatPeso(month.totalAmount || 0);
           const paid = formatPeso(month.paidAmount || 0);
-          const status = month.isPaid ? "PAID" : "PENDING"; // Use accurate paid status
+          const status = month.isPaid ? "PAID" : "PENDING";
 
           return [
             `Month ${idx + 1}`,
@@ -877,50 +878,51 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
           body: breakdownData,
           theme: "striped",
           headStyles: {
-            fillColor: colors.accent,
+            fillColor: [95, 203, 100],
             textColor: [255, 255, 255],
-            fontSize: 8,
+            fontSize: 7,
             fontStyle: "bold",
+            cellPadding: { top: 2, right: 0.8, bottom: 2, left: 0.8 },
+            halign: "center",
           },
           bodyStyles: {
             textColor: colors.text,
-            fontSize: 7,
+            fontSize: 6,
+            cellPadding: { top: 2, right: 0.8, bottom: 2, left: 0.8 },
+            halign: "center",
+            minCellHeight: 5,
           },
           alternateRowStyles: {
-            fillColor: isDarkMode ? [51, 65, 85] : [249, 250, 251],
+            fillColor: colors.cardBg,
           },
           columnStyles: {
-            0: { cellWidth: 20 },
-            1: { cellWidth: 25 },
-            2: { cellWidth: 22 },
-            3: { cellWidth: 22 },
-            4: { cellWidth: 22 },
-            5: { cellWidth: 22 },
-            6: { cellWidth: 20, fontStyle: "bold" },
+            "*": { cellWidth: "auto" },
           },
-          margin: { left: margin, right: margin },
+          margin: { left: 18, right: 18 },
+          tableWidth: "auto",
+          horizontalPageBreak: true,
         });
 
-        yPosition = doc.lastAutoTable.finalY + 15;
+        yPosition = doc.lastAutoTable.finalY + 10;
       }
 
-      // Enhanced Payment History Section with method detection
+      // Compact Payment History Section
       if (
         loan.payments &&
         typeof loan.payments === "object" &&
         Object.keys(loan.payments).length > 0
       ) {
         // Check if we need a new page with footer buffer
-        if (yPosition > pageHeight - 100) {
+        if (yPosition > pageHeight - 70) {
           doc.addPage();
-          yPosition = 30;
+          yPosition = 25;
         }
 
         doc.setTextColor(...colors.text);
-        doc.setFontSize(12);
+        doc.setFontSize(10); // Reduced from 12
         doc.setFont("helvetica", "bold");
         doc.text("Payment History:", margin, yPosition);
-        yPosition += 12;
+        yPosition += 5;
 
         const payments = Object.values(loan.payments)
           .filter((payment) => payment && typeof payment === "object")
@@ -958,64 +960,71 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
           body: paymentData,
           theme: "striped",
           headStyles: {
-            fillColor: colors.accent,
+            fillColor: [95, 203, 100],
             textColor: [255, 255, 255],
-            fontSize: 8,
+            fontSize: 7,
             fontStyle: "bold",
+            cellPadding: { top: 2, right: 0.8, bottom: 2, left: 0.8 },
+            halign: "center",
           },
           bodyStyles: {
             textColor: colors.text,
-            fontSize: 7,
+            fontSize: 6,
+            cellPadding: { top: 2, right: 0.8, bottom: 2, left: 0.8 },
+            halign: "center",
+            minCellHeight: 5,
           },
           alternateRowStyles: {
-            fillColor: isDarkMode ? [51, 65, 85] : [249, 250, 251],
+            fillColor: colors.cardBg,
           },
           columnStyles: {
-            0: { cellWidth: 25 },
-            1: { cellWidth: 20 },
-            2: { cellWidth: 25 },
-            3: { cellWidth: 30 },
-            4: { cellWidth: 30 },
-            5: { cellWidth: 15, halign: "center" },
+            "*": { cellWidth: "auto" },
           },
-          margin: { left: margin, right: margin },
+          margin: { left: 18, right: 18 },
+          tableWidth: "auto",
+          horizontalPageBreak: true,
         });
 
-        yPosition = doc.lastAutoTable.finalY + 20;
+        yPosition = doc.lastAutoTable.finalY + 15;
       }
 
-      // Add separator between loans (except for last loan)
+      // Add compact separator between loans (except for last loan)
+      // Enhanced separator between loans
       if (index < loans.length - 1) {
         // Check if we need a new page before adding separator
         if (yPosition > pageHeight - 50) {
           doc.addPage();
-          yPosition = 30;
+          yPosition = 25;
         } else {
-          doc.setDrawColor(...colors.lightText);
-          doc.setLineWidth(0.5);
-          doc.line(margin, yPosition, pageWidth - margin, yPosition);
-          yPosition += 25;
+          // Add decorative separator
+          doc.setFillColor(95, 203, 100);
+          doc.rect(margin, yPosition + 5, pageWidth - 2 * margin, 1, "F");
+
+          // Add loan number indicator for next loan
+          doc.setTextColor(...colors.lightText);
+          doc.setFontSize(8);
+          doc.setFont("helvetica", "italic");
+          const nextLoanText = `── End of Loan ${index + 1} ──`;
+          const textWidth = doc.getTextWidth(nextLoanText);
+          doc.text(nextLoanText, (pageWidth - textWidth) / 2, yPosition + 12);
+
+          yPosition += 20;
         }
       }
     });
 
-    // Add page numbers and footer to all pages
+    // Add page numbers and compact footer to all pages
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
 
-      // Footer background
-      doc.setFillColor(...colors.primary);
-      doc.rect(0, pageHeight - 20, pageWidth, 20, "F");
-
-      // Footer text
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(8);
+      // Compact footer text
+      doc.setFontSize(7); // Reduced from 8
       doc.setFont("helvetica", "normal");
 
       const footerText = `Loan Tracker Report | Page ${i} of ${pageCount} | Generated ${currentDate}`;
       const textWidth = doc.getTextWidth(footerText);
-      doc.text(footerText, (pageWidth - textWidth) / 2, pageHeight - 8);
+      doc.text(footerText, (pageWidth - textWidth) / 2, pageHeight - 6); // Adjusted position
     }
 
     // Generate filename and save

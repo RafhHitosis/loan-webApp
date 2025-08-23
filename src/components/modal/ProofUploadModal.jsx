@@ -134,8 +134,7 @@ const ProofUploadModal = ({ loan, open, onClose, onUpload }) => {
               <label
                 className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
               >
-                Payment Amount (Max: ₱
-                {(loan?.remainingAmount || 0).toLocaleString()})
+                Payment Amount
               </label>
               <div className="relative">
                 <span

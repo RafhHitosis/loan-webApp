@@ -8,7 +8,7 @@ import cloudinaryService from "../../services/cloudinaryService";
 import ProfileImageModal from "../modal/ProfileImageModal";
 import ChangePasswordModal from "../modal/ChangePasswordModal";
 
-const Profile = () => {
+const Profile = ({ onModalStateChange }) => {
   const { colors } = useTheme();
   const { user } = useAuth();
 
@@ -18,6 +18,14 @@ const Profile = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  // Communicate modal state changes to parent
+  useEffect(() => {
+    const isAnyModalOpen = showImageModal || showPasswordModal;
+    if (onModalStateChange) {
+      onModalStateChange(isAnyModalOpen);
+    }
+  }, [showImageModal, showPasswordModal, onModalStateChange]);
 
   // Load user profile data
   useEffect(() => {
