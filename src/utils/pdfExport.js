@@ -1008,7 +1008,7 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
           const textWidth = doc.getTextWidth(nextLoanText);
           doc.text(nextLoanText, (pageWidth - textWidth) / 2, yPosition + 12);
 
-          yPosition += 20;
+          yPosition += 35;
         }
       }
     });
