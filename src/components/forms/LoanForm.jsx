@@ -14,7 +14,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
     amount: "",
     type: "lent",
     date: new Date().toISOString().split("T")[0],
-    dueDate: "",
+    dueDate: "", // This will be required now
     description: "",
     status: "active",
   });
@@ -104,16 +104,31 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
       return;
     }
 
+    // REQUIRED: Due date validation
+    if (!formData.dueDate) {
+      setError("Please select a due date");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Validate due date is after loan date
+    const loanDate = new Date(formData.date);
+    const dueDate = new Date(formData.dueDate);
+
+    if (dueDate <= loanDate) {
+      setError("Due date must be after the loan date");
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       // Use the loan date as start date for monthly breakdown calculation
-      const monthlyBreakdown = formData.dueDate
-        ? calculateMonthlyBreakdown(
-            principalAmount,
-            formData.dueDate,
-            interestRate,
-            formData.date
-          )
-        : null;
+      const monthlyBreakdown = calculateMonthlyBreakdown(
+        principalAmount,
+        formData.dueDate,
+        interestRate,
+        formData.date
+      );
 
       // Calculate the total amount with interest to save as the main loan amount
       const totalAmountWithInterest =
@@ -216,7 +231,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
               <label
                 className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
               >
-                Person Name
+                Person Name *
               </label>
               <input
                 type="text"
@@ -241,7 +256,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
               <label
                 className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
               >
-                Principal Amount
+                Principal Amount *
                 <span className={`${colors.text.tertiary} text-xs ml-1`}>
                   (Amount before interest)
                 </span>
@@ -302,7 +317,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
               <label
                 className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
               >
-                Date
+                Loan Date *
               </label>
               <input
                 type="date"
@@ -317,7 +332,10 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
               <label
                 className={`block ${colors.text.secondary} text-sm font-medium mb-2`}
               >
-                Due Date (Optional)
+                Due Date *{" "}
+                <span className={`${colors.text.tertiary} text-xs`}>
+                  (Required for payment schedule)
+                </span>
               </label>
               <input
                 type="date"
@@ -325,10 +343,11 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                 onChange={(e) => updateFormData("dueDate", e.target.value)}
                 min={formData.date}
                 className={`w-full px-4 py-3 ${colors.background.elevated} border ${colors.border.primary} rounded-xl ${colors.text.primary} focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200`}
+                required
               />
             </div>
 
-            {formData.dueDate && (
+            {formData.dueDate && formData.amount && (
               <div className="space-y-3">
                 <label
                   className={`block ${colors.text.secondary} text-sm font-medium`}
@@ -444,242 +463,250 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                 </div>
 
                 {/* GLoan Payment Preview - Using loan start date */}
-                {formData.amount && formData.dueDate && (
-                  <div
-                    className={`border rounded-xl p-4 ${
-                      interestRate === 0
-                        ? "bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-blue-500/20"
-                        : "bg-gradient-to-r from-emerald-500/10 to-blue-500/10 border-emerald-500/20"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-3">
-                      <div
-                        className={`w-2 h-2 rounded-full animate-pulse ${
-                          interestRate === 0 ? "bg-blue-400" : "bg-emerald-400"
-                        }`}
-                      ></div>
-                      <span
-                        className={`${colors.text.primary} font-medium text-sm`}
-                      >
-                        {interestRate === 0
-                          ? "Payment Plan (No Interest)"
-                          : "GLoan Preview (Flat Add-on)"}
-                      </span>
-                    </div>
+                {(() => {
+                  // Use the loan date as start date for calculation
+                  const preview = calculateMonthlyBreakdown(
+                    parseFloat(formData.amount) || 0,
+                    formData.dueDate,
+                    interestRate,
+                    formData.date // Pass the loan date as start date
+                  );
+                  return preview ? (
+                    <div
+                      className={`border rounded-xl p-4 ${
+                        interestRate === 0
+                          ? "bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-blue-500/20"
+                          : "bg-gradient-to-r from-emerald-500/10 to-blue-500/10 border-emerald-500/20"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <div
+                          className={`w-2 h-2 rounded-full animate-pulse ${
+                            interestRate === 0
+                              ? "bg-blue-400"
+                              : "bg-emerald-400"
+                          }`}
+                        ></div>
+                        <span
+                          className={`${colors.text.primary} font-medium text-sm`}
+                        >
+                          {interestRate === 0
+                            ? "Payment Plan (No Interest)"
+                            : "GLoan Preview (Flat Add-on)"}
+                        </span>
+                      </div>
 
-                    {(() => {
-                      // Use the loan date as start date for calculation
-                      const preview = calculateMonthlyBreakdown(
-                        parseFloat(formData.amount) || 0,
-                        formData.dueDate,
-                        interestRate,
-                        formData.date // Pass the loan date as start date
-                      );
-                      return preview ? (
-                        <div className="space-y-2">
-                          {/* Total Loan Amount Warning */}
-                          {interestRate > 0 && (
-                            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-2">
-                              <div className="text-center">
-                                <div className="text-amber-400 text-xs font-medium mb-1">
-                                  ⚠️ Important: Loan Amount Saved
-                                </div>
-                                <div className="text-amber-300 text-sm">
-                                  Principal: ₱
-                                  {parseFloat(formData.amount).toLocaleString()}
-                                </div>
-                                <div className="text-amber-400 text-sm font-semibold">
-                                  Total Loan Amount: ₱
-                                  {preview.totalAmount.toLocaleString()}
-                                </div>
-                                <div className="text-amber-300 text-xs mt-1">
-                                  (This total will be saved as the main loan
-                                  amount)
-                                </div>
+                      <div className="space-y-2">
+                        {/* Total Loan Amount Warning */}
+                        {interestRate > 0 && (
+                          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-2">
+                            <div className="text-center">
+                              <div className="text-amber-400 text-xs font-medium mb-1">
+                                ⚠️ Important: Loan Amount Saved
+                              </div>
+                              <div className="text-amber-300 text-sm">
+                                Principal: ₱
+                                {parseFloat(formData.amount).toLocaleString()}
+                              </div>
+                              <div className="text-amber-400 text-sm font-semibold">
+                                Total Loan Amount: ₱
+                                {preview.totalAmount.toLocaleString()}
+                              </div>
+                              <div className="text-amber-300 text-xs mt-1">
+                                (This total will be saved as the main loan
+                                amount)
                               </div>
                             </div>
-                          )}
+                          </div>
+                        )}
 
-                          {/* Processing Fee & Net Proceeds - GLoan specific */}
-                          {interestRate > 0 && (
-                            <div
-                              className={`${colors.background.secondary} border ${colors.border.secondary} rounded-lg p-3 mb-2`}
-                            >
-                              <div className="text-center mb-2">
-                                <div
-                                  className={`${colors.text.secondary} text-xs font-medium`}
-                                >
-                                  GLoan Processing
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div className="text-center">
-                                  <div
-                                    className={`${colors.text.tertiary} text-xs`}
-                                  >
-                                    Processing Fee (3%)
-                                  </div>
-                                  <div className="text-red-400 font-semibold text-sm">
-                                    -₱{preview.processingFee.toLocaleString()}
-                                  </div>
-                                </div>
-                                <div className="text-center">
-                                  <div
-                                    className={`${colors.text.tertiary} text-xs`}
-                                  >
-                                    Net Proceeds
-                                  </div>
-                                  <div className="text-emerald-400 font-semibold text-sm">
-                                    ₱{preview.netProceeds.toLocaleString()}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Monthly Payment */}
+                        {/* Processing Fee & Net Proceeds - GLoan specific */}
+                        {interestRate > 0 && (
                           <div
-                            className={`rounded-lg p-3 ${
-                              interestRate === 0
-                                ? "bg-blue-500/20"
-                                : `${colors.background.elevated}`
-                            }`}
+                            className={`${colors.background.secondary} border ${colors.border.secondary} rounded-lg p-3 mb-2`}
                           >
-                            <div className="text-center">
+                            <div className="text-center mb-2">
                               <div
-                                className={`${colors.text.tertiary} text-xs mb-1`}
+                                className={`${colors.text.secondary} text-xs font-medium`}
                               >
-                                {interestRate === 0
-                                  ? "Monthly Payment (Equal Splits)"
-                                  : "Standard Monthly Payment"}
+                                GLoan Processing
                               </div>
-                              <div
-                                className={`font-bold text-lg ${
-                                  interestRate === 0
-                                    ? "text-blue-400"
-                                    : "text-emerald-400"
-                                }`}
-                              >
-                                ₱{preview.monthlyPayment.toLocaleString()}
-                              </div>
-                              {/* Show breakdown of monthly payment */}
-                              {interestRate > 0 && (
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="text-center">
                                 <div
-                                  className={`text-xs ${colors.text.tertiary} mt-1`}
+                                  className={`${colors.text.tertiary} text-xs`}
                                 >
-                                  ₱{preview.principalPerMonth.toLocaleString()}{" "}
-                                  avg. principal + ₱
-                                  {preview.interestPerMonth.toLocaleString()}{" "}
-                                  avg. interest
+                                  Processing Fee (3%)
                                 </div>
-                              )}
-                              {/* Add note about final payment adjustment */}
-                              {interestRate > 0 && (
-                                <div className="text-xs text-blue-400 mt-1">
-                                  *Final payment may be slightly adjusted
+                                <div className="text-red-400 font-semibold text-sm">
+                                  -₱{preview.processingFee.toLocaleString()}
                                 </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Summary Grid */}
-                          <div className="grid grid-cols-2 gap-2">
-                            <div
-                              className={`${colors.background.secondary} rounded-lg p-2 text-center`}
-                            >
-                              <div
-                                className={`${colors.text.tertiary} text-xs`}
-                              >
-                                Total Repayment
                               </div>
-                              <div
-                                className={`${colors.text.primary} font-semibold text-sm`}
-                              >
-                                ₱{preview.totalAmount.toLocaleString()}
-                              </div>
-                            </div>
-                            <div
-                              className={`${colors.background.secondary} rounded-lg p-2 text-center`}
-                            >
-                              <div
-                                className={`${colors.text.tertiary} text-xs`}
-                              >
-                                {interestRate === 0
-                                  ? "Interest Saved"
-                                  : "Total Interest"}
-                              </div>
-                              <div
-                                className={`font-semibold text-sm ${
-                                  interestRate === 0
-                                    ? "text-blue-400"
-                                    : "text-amber-400"
-                                }`}
-                              >
-                                {interestRate === 0
-                                  ? "₱0"
-                                  : `₱${preview.totalInterest.toLocaleString()}`}
+                              <div className="text-center">
+                                <div
+                                  className={`${colors.text.tertiary} text-xs`}
+                                >
+                                  Net Proceeds
+                                </div>
+                                <div className="text-emerald-400 font-semibold text-sm">
+                                  ₱{preview.netProceeds.toLocaleString()}
+                                </div>
                               </div>
                             </div>
                           </div>
+                        )}
 
-                          {/* GLoan Formula Info */}
-                          {interestRate > 0 && (
-                            <div
-                              className={`${colors.background.secondary} rounded-lg p-2 text-center`}
-                            >
-                              <div
-                                className={`${colors.text.tertiary} text-xs`}
-                              >
-                                Formula: (₱
-                                {parseFloat(formData.amount).toLocaleString()} +
-                                ₱{preview.totalInterest.toLocaleString()}) ÷{" "}
-                                {preview.monthlyBreakdown.length} months
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Number of Payments with context */}
+                        {/* Monthly Payment */}
+                        <div
+                          className={`rounded-lg p-3 ${
+                            interestRate === 0
+                              ? "bg-blue-500/20"
+                              : `${colors.background.elevated}`
+                          }`}
+                        >
                           <div className="text-center">
-                            <span className={`${colors.text.tertiary} text-xs`}>
-                              {preview.monthlyBreakdown.length} monthly payments
+                            <div
+                              className={`${colors.text.tertiary} text-xs mb-1`}
+                            >
                               {interestRate === 0
-                                ? " • Interest-free"
-                                : " • Flat add-on interest"}
-                            </span>
-                          </div>
-
-                          {/* Show date range for clarity */}
-                          <div className="text-center">
-                            <span className={`${colors.text.muted} text-xs`}>
-                              From{" "}
-                              {new Date(formData.date).toLocaleDateString()} to{" "}
-                              {new Date(formData.dueDate).toLocaleDateString()}
-                            </span>
-                          </div>
-
-                          {/* Early settlement note */}
-                          {interestRate > 0 && (
-                            <div className="text-center">
-                              <span className="text-blue-400 text-xs">
-                                💡 Early settlement available with prorated last
-                                month interest
-                              </span>
+                                ? "Monthly Payment (Equal Splits)"
+                                : "Standard Monthly Payment"}
                             </div>
-                          )}
-
-                          {/* Interest Rate Confirmation */}
-                          <div className="text-center">
-                            <span className="text-emerald-400 text-xs font-medium">
-                              📊 Interest Rate:{" "}
-                              {(interestRate * 100).toFixed(2)}% monthly will be
-                              saved
-                            </span>
+                            <div
+                              className={`font-bold text-lg ${
+                                interestRate === 0
+                                  ? "text-blue-400"
+                                  : "text-emerald-400"
+                              }`}
+                            >
+                              ₱{preview.monthlyPayment.toLocaleString()}
+                            </div>
+                            {/* Show breakdown of monthly payment */}
+                            {interestRate > 0 && (
+                              <div
+                                className={`text-xs ${colors.text.tertiary} mt-1`}
+                              >
+                                ₱{preview.principalPerMonth.toLocaleString()}{" "}
+                                avg. principal + ₱
+                                {preview.interestPerMonth.toLocaleString()} avg.
+                                interest
+                              </div>
+                            )}
+                            {/* Add note about final payment adjustment */}
+                            {interestRate > 0 && (
+                              <div className="text-xs text-blue-400 mt-1">
+                                *Final payment may be slightly adjusted
+                              </div>
+                            )}
                           </div>
                         </div>
-                      ) : null;
-                    })()}
-                  </div>
-                )}
+
+                        {/* Summary Grid */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div
+                            className={`${colors.background.secondary} rounded-lg p-2 text-center`}
+                          >
+                            <div className={`${colors.text.tertiary} text-xs`}>
+                              Total Repayment
+                            </div>
+                            <div
+                              className={`${colors.text.primary} font-semibold text-sm`}
+                            >
+                              ₱{preview.totalAmount.toLocaleString()}
+                            </div>
+                          </div>
+                          <div
+                            className={`${colors.background.secondary} rounded-lg p-2 text-center`}
+                          >
+                            <div className={`${colors.text.tertiary} text-xs`}>
+                              {interestRate === 0
+                                ? "Interest Saved"
+                                : "Total Interest"}
+                            </div>
+                            <div
+                              className={`font-semibold text-sm ${
+                                interestRate === 0
+                                  ? "text-blue-400"
+                                  : "text-amber-400"
+                              }`}
+                            >
+                              {interestRate === 0
+                                ? "₱0"
+                                : `₱${preview.totalInterest.toLocaleString()}`}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* GLoan Formula Info */}
+                        {interestRate > 0 && (
+                          <div
+                            className={`${colors.background.secondary} rounded-lg p-2 text-center`}
+                          >
+                            <div className={`${colors.text.tertiary} text-xs`}>
+                              Formula: (₱
+                              {parseFloat(formData.amount).toLocaleString()} + ₱
+                              {preview.totalInterest.toLocaleString()}) ÷{" "}
+                              {preview.monthlyBreakdown.length} months
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Number of Payments with context */}
+                        <div className="text-center">
+                          <span className={`${colors.text.tertiary} text-xs`}>
+                            {preview.monthlyBreakdown.length} monthly payments
+                            {interestRate === 0
+                              ? " • Interest-free"
+                              : " • Flat add-on interest"}
+                          </span>
+                        </div>
+
+                        {/* Show date range for clarity */}
+                        <div className="text-center">
+                          <span className={`${colors.text.muted} text-xs`}>
+                            From {new Date(formData.date).toLocaleDateString()}{" "}
+                            to {new Date(formData.dueDate).toLocaleDateString()}
+                          </span>
+                        </div>
+
+                        {/* Show payment schedule range */}
+                        <div className="text-center">
+                          <span className={`${colors.text.muted} text-xs`}>
+                            First payment:{" "}
+                            {new Date(
+                              preview.monthlyBreakdown[0]?.dueDate
+                            ).toLocaleDateString()}{" "}
+                            • Final payment:{" "}
+                            {new Date(
+                              preview.monthlyBreakdown[
+                                preview.monthlyBreakdown.length - 1
+                              ]?.dueDate
+                            ).toLocaleDateString()}
+                          </span>
+                        </div>
+
+                        {/* Early settlement note */}
+                        {interestRate > 0 && (
+                          <div className="text-center">
+                            <span className="text-blue-400 text-xs">
+                              💡 Early settlement available with prorated last
+                              month interest
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Interest Rate Confirmation */}
+                        <div className="text-center">
+                          <span className="text-emerald-400 text-xs font-medium">
+                            📊 Interest Rate: {(interestRate * 100).toFixed(2)}%
+                            monthly will be saved
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
               </div>
             )}
 

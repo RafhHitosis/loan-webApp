@@ -343,7 +343,6 @@ const ImageCropper = ({ image, onCropComplete, onCancel }) => {
           disabled={isProcessing}
           className={`flex-1 px-4 py-3 rounded-xl border ${colors.border.primary} ${colors.text.secondary} ${colors.interactive.hover} font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed`}
         >
-          <RotateCcw className="w-4 h-4 inline mr-2" />
           Back
         </button>
         <button
@@ -365,10 +364,7 @@ const ImageCropper = ({ image, onCropComplete, onCancel }) => {
               </div>
             </>
           ) : (
-            <>
-              <Check className="w-4 h-4 inline mr-2" />
-              Crop Image
-            </>
+            <>Crop Image</>
           )}
         </button>
       </div>

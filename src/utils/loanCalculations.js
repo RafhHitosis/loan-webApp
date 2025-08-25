@@ -1,9 +1,8 @@
 export const PHILIPPINES_INTEREST_RATES = {
-  monthly: 0.05, // 5% per month (common in Philippines)
-  annual: 0.6, // 60% per annum
+  monthly: 0.05,
+  annual: 0.6,
 };
 
-// Normalize a monetary value to 2 decimals and clamp tiny residuals to zero
 export const normalizeAmount = (value, epsilon = 0.01) => {
   let n = Math.round((parseFloat(value) || 0) * 100) / 100;
   if (Math.abs(n) <= epsilon) n = 0;
@@ -11,7 +10,20 @@ export const normalizeAmount = (value, epsilon = 0.01) => {
   return n;
 };
 
-// Compute remaining from a breakdown + payments (fallbacks handled by callers)
+const calculateActualMonthsDifference = (startDate, endDate) => {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  let months = (end.getFullYear() - start.getFullYear()) * 12;
+  months += end.getMonth() - start.getMonth();
+
+  if (end.getDate() < start.getDate()) {
+    months--;
+  }
+
+  return Math.max(1, months);
+};
+
 export const computeRemainingFromBreakdown = (breakdown, payments) => {
   if (!Array.isArray(breakdown) || breakdown.length === 0) return null;
   const applied = updateBreakdownPayments(breakdown, payments);
@@ -24,16 +36,12 @@ export const computeRemainingFromBreakdown = (breakdown, payments) => {
   return normalizeAmount(remaining);
 };
 
-// GLoan flat add-on style calculation with precise last-payment adjustment
-// If interestRate === 0: split principal equally.
-// Else: totalInterest = principal * rate * months, monthly payment equalized,
-//       last month adjusted to account for rounding to cents.
 export const calculateMonthlyBreakdown = (
   amount,
   dueDate,
   interestRate = PHILIPPINES_INTEREST_RATES.monthly,
   startDate = null,
-  processingFeeRate = 0.03 // 3% processing fee
+  processingFeeRate = 0.03
 ) => {
   if (!dueDate) return null;
 
@@ -41,29 +49,25 @@ export const calculateMonthlyBreakdown = (
   const loanStartDate = startDate ? new Date(startDate) : new Date();
   const endDate = new Date(dueDate);
 
-  // Calculate months from loan start date to due date
-  const monthsDiff = Math.ceil(
-    (endDate - loanStartDate) / (1000 * 60 * 60 * 24 * 30)
-  );
+  const monthsDiff = calculateActualMonthsDifference(loanStartDate, endDate);
 
   if (monthsDiff <= 0) return null;
 
-  // Calculate processing fee and net proceeds
   const processingFee = normalizeAmount(principal * processingFeeRate);
   const netProceeds = normalizeAmount(principal - processingFee);
 
   const breakdown = [];
 
   if (!interestRate || interestRate === 0) {
-    // No interest - simple equal principal splits
     const rawMonthly = principal / monthsDiff;
     const monthlyPayment = normalizeAmount(rawMonthly);
 
-    // Adjust last month to ensure exact principal is matched
     let accumulated = 0;
     for (let i = 0; i < monthsDiff; i++) {
       const paymentDate = new Date(loanStartDate);
       paymentDate.setMonth(paymentDate.getMonth() + i + 1);
+
+      paymentDate.setDate(loanStartDate.getDate());
 
       let thisPayment;
       if (i < monthsDiff - 1) {
@@ -99,16 +103,13 @@ export const calculateMonthlyBreakdown = (
     };
   }
 
-  // Flat add-on interest method
   const n = monthsDiff;
   const totalInterestRaw = principal * interestRate * n;
   const totalInterest = normalizeAmount(totalInterestRaw);
   const totalAmount = normalizeAmount(principal + totalInterest);
 
-  // Equalize monthly payments with last-month adjustment for cents
   const baseMonthly = normalizeAmount(totalAmount / n);
 
-  // Flat monthly interest on original principal, last month adjusted for rounding
   const baseMonthlyInterest = normalizeAmount(principal * interestRate);
 
   let monthlyPaidAccum = 0;
@@ -118,25 +119,28 @@ export const calculateMonthlyBreakdown = (
     const paymentDate = new Date(loanStartDate);
     paymentDate.setMonth(paymentDate.getMonth() + i + 1);
 
+    paymentDate.setDate(loanStartDate.getDate());
+
     const isLast = i === n - 1;
 
-    // Payment amount for this month
     const thisMonthPayment = isLast
       ? normalizeAmount(totalAmount - monthlyPaidAccum)
       : baseMonthly;
 
-    // Interest for this month
     const thisMonthInterest = isLast
       ? normalizeAmount(totalInterest - interestAccum)
       : baseMonthlyInterest;
 
-    const thisMonthPrincipal = normalizeAmount(thisMonthPayment - thisMonthInterest);
+    const thisMonthPrincipal = normalizeAmount(
+      thisMonthPayment - thisMonthInterest
+    );
 
     monthlyPaidAccum += thisMonthPayment;
     interestAccum += thisMonthInterest;
 
     const remainingBalance = normalizeAmount(
-      principal - breakdown.reduce((s, m) => s + (m.principalAmount || 0), 0) -
+      principal -
+        breakdown.reduce((s, m) => s + (m.principalAmount || 0), 0) -
         thisMonthPrincipal
     );
 
@@ -153,7 +157,8 @@ export const calculateMonthlyBreakdown = (
       isLastPayment: isLast,
       canEarlySettle: true,
       standardPaymentAmount: baseMonthly,
-      isAdjustedFinalPayment: isLast && Math.abs(thisMonthPayment - baseMonthly) > 0.01,
+      isAdjustedFinalPayment:
+        isLast && Math.abs(thisMonthPayment - baseMonthly) > 0.01,
     });
   }
 
@@ -169,7 +174,6 @@ export const calculateMonthlyBreakdown = (
   };
 };
 
-// Calculate early settlement amount (approximation)
 export const calculateEarlySettlement = (
   principal,
   interestRate,
@@ -181,12 +185,15 @@ export const calculateEarlySettlement = (
   const remainingMonths = totalMonths - monthsPaid;
   const remainingPrincipal = principalPerMonth * remainingMonths;
 
-  const proratedInterest = principal * interestRate * (daysIntoCurrentMonth / 30);
+  const proratedInterest =
+    principal * interestRate * (daysIntoCurrentMonth / 30);
 
   return {
     remainingPrincipal: normalizeAmount(remainingPrincipal),
     proratedInterest: normalizeAmount(proratedInterest),
-    totalEarlySettlement: normalizeAmount(remainingPrincipal + proratedInterest),
+    totalEarlySettlement: normalizeAmount(
+      remainingPrincipal + proratedInterest
+    ),
     savedInterest: normalizeAmount(
       (remainingMonths - 1) * principal * interestRate +
         (principal * interestRate - proratedInterest)
@@ -206,20 +213,25 @@ export const updateBreakdownPayments = (breakdown, payments) => {
   for (let payment of sortedPayments) {
     let paymentAmount = parseFloat(payment.amount) || 0;
 
-    // Find unpaid months in order and apply with tolerance
     for (let month of updatedBreakdown) {
       if (month.isPaid || paymentAmount <= 0) continue;
 
-      const amountNeeded = normalizeAmount(month.totalAmount - (month.paidAmount || 0));
+      const amountNeeded = normalizeAmount(
+        month.totalAmount - (month.paidAmount || 0)
+      );
       const amountToApply = Math.min(paymentAmount, amountNeeded);
 
-      month.paidAmount = normalizeAmount((month.paidAmount || 0) + amountToApply);
+      month.paidAmount = normalizeAmount(
+        (month.paidAmount || 0) + amountToApply
+      );
       paymentAmount = normalizeAmount(paymentAmount - amountToApply);
 
       if (month.paidAmount + 0.009 >= month.totalAmount) {
         month.isPaid = true;
         month.paidAmount = normalizeAmount(month.totalAmount);
-        month.paidDate = new Date(payment.timestamp || Date.now()).toISOString().split("T")[0];
+        month.paidDate = new Date(payment.timestamp || Date.now())
+          .toISOString()
+          .split("T")[0];
       }
 
       if (paymentAmount <= 0.001) break;

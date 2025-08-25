@@ -494,10 +494,7 @@ const ChangePasswordModal = ({ isOpen, onClose, user }) => {
                 Updated!
               </>
             ) : (
-              <>
-                <Lock className="w-4 h-4" />
-                Update Password
-              </>
+              <>Update</>
             )}
           </button>
         </div>

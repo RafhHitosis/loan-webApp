@@ -4,7 +4,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import ThemeToggle from "../common/ThemeToggle";
 
 const AppHeader = ({ user, onLogout }) => {
-  const { colors } = useTheme();
+  const { isDarkMode, colors } = useTheme();
 
   return (
     <header
@@ -30,12 +30,21 @@ const AppHeader = ({ user, onLogout }) => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <ThemeToggle
-              className={`w-10 h-10 rounded-xl ${colors.background.elevated} ${colors.interactive.hover} ${colors.text.secondary} transition-all duration-200 flex items-center justify-center border ${colors.border.primary} shadow-sm`}
-            />
+            <ThemeToggle />
             <button
               onClick={onLogout}
-              className={`w-10 h-10 rounded-xl ${colors.background.elevated} ${colors.interactive.hover} ${colors.text.secondary} hover:text-red-400 transition-all duration-200 flex items-center justify-center border ${colors.border.primary} shadow-sm`}
+              className={`
+                relative inline-flex h-10 w-10 items-center justify-center 
+                rounded-xl transition-all duration-300 ease-in-out
+                ${
+                  isDarkMode
+                    ? "bg-slate-700/50 hover:bg-slate-600/50 text-gray-400 hover:text-red-400"
+                    : "bg-white hover:bg-gray-300 text-gray-700 hover:text-red-500"
+                }
+                border ${colors.border.primary}
+                shadow-sm hover:shadow-md
+              `}
+              title="Sign out"
               aria-label="Sign out"
             >
               <LogOut className="w-5 h-5" />
