@@ -186,9 +186,34 @@ const getActualLoanStatus = (loan) => {
   return loan.status || "active";
 };
 
+// Helper function to load and convert image to base64
+const loadImageAsBase64 = (src) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      try {
+        const dataURL = canvas.toDataURL("image/png");
+        resolve(dataURL);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    img.onerror = reject;
+    img.src = src;
+  });
+};
+
 export const exportLoansToPDF = async (loans, isDarkMode, user) => {
   try {
     const jsPDF = await loadPDFLibrary();
+
+    const iconDataUrl = await loadImageAsBase64("/loan.png");
 
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.width;
@@ -205,8 +230,8 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
           lightText: [173, 181, 189], // Light gray
           background: [52, 58, 64], // Soft dark gray
           cardBg: [73, 80, 87], // Medium gray
-          danger: [248, 144, 144], // Pastel red
-          warning: [255, 193, 119], // Pastel orange
+          danger: [200, 115, 115],
+          warning: [205, 155, 95], // Pastel orange
         }
       : {
           primary: [147, 167, 209], // Soft periwinkle
@@ -216,8 +241,8 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
           lightText: [134, 142, 150], // Medium gray
           background: [248, 249, 250], // Very light gray
           cardBg: [233, 236, 239], // Light blue-gray
-          danger: [255, 182, 193], // Light pink
-          warning: [255, 218, 185], // Light peach
+          danger: [205, 145, 155],
+          warning: [205, 175, 150], // Light peach
         };
 
     let yPosition = 25; // Reduced from 30
@@ -236,7 +261,17 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
     doc.setFont("helvetica", "bold");
     const titleText = "Loan Tracker Report";
     const titleWidth = doc.getTextWidth(titleText);
-    doc.text(titleText, (pageWidth - titleWidth) / 2, 17);
+
+    const iconSize = 10; // Icon size in PDF units
+    const iconTitleSpacing = 3; // Space between icon and title
+    const totalWidth = iconSize + iconTitleSpacing + titleWidth;
+    const startX = (pageWidth - totalWidth) / 2;
+
+    // Add icon
+    doc.addImage(iconDataUrl, "PNG", startX, 9, iconSize, iconSize);
+
+    // Add title next to icon
+    doc.text(titleText, startX + iconSize + iconTitleSpacing, 17);
 
     // Centered date and user info
     doc.setFontSize(10);
@@ -261,7 +296,7 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
     yPosition = 55;
 
     doc.setTextColor(...colors.text);
-    doc.setFillColor(95, 203, 100);
+    doc.setFillColor(75, 160, 80);
     doc.rect(margin - 3, yPosition - 8, pageWidth - 2 * margin + 6, 12, "F"); // Reduced height
 
     doc.setTextColor(255, 255, 255);
@@ -470,7 +505,7 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
       body: summaryData,
       theme: "grid",
       headStyles: {
-        fillColor: [95, 203, 100],
+        fillColor: [75, 160, 80],
         textColor: [255, 255, 255],
         fontStyle: "bold",
         fontSize: 9, // Reduced from 10
@@ -500,7 +535,7 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
             data.cell.raw === "Payment Analytics" ||
             data.cell.raw === "Interest Analytics"
           ) {
-            data.cell.styles.fillColor = [95, 203, 100];
+            data.cell.styles.fillColor = [75, 160, 80];
             data.cell.styles.textColor = [255, 255, 255];
             data.cell.styles.fontStyle = "bold";
           } else {
@@ -544,7 +579,7 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(12); // Reduced from 14
       doc.setFont("helvetica", "bold");
-      doc.text("⚠ Attention Required", margin, yPosition);
+      doc.text("Attention Required", margin, yPosition);
       yPosition += 15; // Reduced from 20
 
       if (overdueLoans.length > 0) {
@@ -578,7 +613,7 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
       }
 
       if (dueSoonLoans.length > 0) {
-        doc.setTextColor(...colors.warning);
+        doc.setTextColor(200, 115, 115);
         doc.setFontSize(10); // Reduced from 12
         doc.text(`${dueSoonLoans.length} Due Soon:`, margin, yPosition);
         yPosition += 8; // Reduced from 10
@@ -611,7 +646,7 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
       }
 
       // Compact loan header
-      doc.setFillColor(80, 80, 80);
+      doc.setFillColor(65, 65, 65);
       doc.rect(
         margin - 3,
         yPosition - 8,
@@ -630,7 +665,7 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
         loan.actualStatus === "active" ? colors.warning : [95, 203, 100];
       doc.setTextColor(...statusColor);
       doc.setFontSize(10); // Reduced from 12
-      const statusText = `[${loan.actualStatus?.toUpperCase() || "UNKNOWN"}]`;
+      const statusText = `${loan.actualStatus?.toUpperCase() || "UNKNOWN"}`;
       const statusWidth = doc.getTextWidth(statusText);
       doc.text(statusText, pageWidth - margin - statusWidth, yPosition);
 
@@ -878,7 +913,7 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
           body: breakdownData,
           theme: "striped",
           headStyles: {
-            fillColor: [95, 203, 100],
+            fillColor: [75, 160, 80],
             textColor: [255, 255, 255],
             fontSize: 7,
             fontStyle: "bold",
@@ -960,7 +995,7 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
           body: paymentData,
           theme: "striped",
           headStyles: {
-            fillColor: [95, 203, 100],
+            fillColor: [75, 160, 80],
             textColor: [255, 255, 255],
             fontSize: 7,
             fontStyle: "bold",
@@ -997,14 +1032,14 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
           yPosition = 25;
         } else {
           // Add decorative separator
-          doc.setFillColor(95, 203, 100);
+          doc.setFillColor(75, 160, 80);
           doc.rect(margin, yPosition + 5, pageWidth - 2 * margin, 1, "F");
 
           // Add loan number indicator for next loan
           doc.setTextColor(...colors.lightText);
           doc.setFontSize(8);
           doc.setFont("helvetica", "italic");
-          const nextLoanText = `── End of Loan ${index + 1} ──`;
+          const nextLoanText = `End of Loan ${index + 1}`;
           const textWidth = doc.getTextWidth(nextLoanText);
           doc.text(nextLoanText, (pageWidth - textWidth) / 2, yPosition + 12);
 
