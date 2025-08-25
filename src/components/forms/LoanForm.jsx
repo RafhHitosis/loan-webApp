@@ -136,8 +136,6 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
         netProceeds: monthlyBreakdown?.netProceeds || principalAmount,
       };
 
-      console.log("Saving loan with interest rate:", interestRate); // Debug log
-
       const result = await onSave(loanDataToSave);
 
       if (result && result.success) {

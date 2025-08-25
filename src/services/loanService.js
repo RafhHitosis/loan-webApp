@@ -118,7 +118,6 @@ const loanService = {
         timestamp: paymentData.timestamp || Date.now(), // Ensure timestamp is set
       });
 
-      console.log("Payment saved to Firebase with key:", paymentKey.key); // ADD this line
       return paymentKey.key;
     } catch (error) {
       console.error("Error adding payment:", error);
@@ -164,9 +163,7 @@ const loanService = {
         [`loans/${userId}/${loanId}/updatedAt`]: Date.now(),
       };
 
-      console.log("Updating loan with:", updates);
       const result = await update(ref(database), updates);
-      console.log("Update result:", result);
 
       return result;
     } catch (error) {

@@ -42,7 +42,6 @@ export const AuthProvider = ({ children }) => {
           createdAt: new Date().toISOString(),
           uid: firebaseUser.uid,
         });
-        console.log(`Created user status for ${firebaseUser.email}`);
       }
     } catch (error) {
       console.error("Error ensuring user status exists:", error);
@@ -57,7 +56,6 @@ export const AuthProvider = ({ children }) => {
       // Method 1: Check custom claims for disabled status
       const tokenResult = await getIdTokenResult(firebaseUser);
       if (tokenResult.claims.disabled === true) {
-        console.log("Account disabled via custom claims");
         return true;
       }
 
@@ -67,7 +65,6 @@ export const AuthProvider = ({ children }) => {
       if (snapshot.exists()) {
         const statusData = snapshot.val();
         if (statusData.disabled === true) {
-          console.log("Account disabled via database");
           return true;
         }
       }
@@ -75,7 +72,6 @@ export const AuthProvider = ({ children }) => {
       // If we get here, account is enabled
       return false;
     } catch (error) {
-      console.log("Error checking account status:", error);
       // For errors, assume account is not disabled to allow access
       return false;
     }

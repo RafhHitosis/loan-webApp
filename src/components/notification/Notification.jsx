@@ -8,9 +8,7 @@ const Notification = ({ message, type, onClose }) => {
   useEffect(() => {
     if (!message) return;
 
-    console.log("Notification mounted:", message, type);
     const timer = setTimeout(() => {
-      console.log("Auto-closing notification");
       onClose();
     }, 5000);
     return () => clearTimeout(timer);

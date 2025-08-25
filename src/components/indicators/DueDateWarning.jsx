@@ -52,11 +52,9 @@ const DueDateWarning = ({ loans, onLoanClick }) => {
   if (dueDateAnalysis.count === 0) return null;
 
   const handleLoanItemClick = (loan) => {
-    console.log("Due date warning clicked for loan:", loan.id || loan.loanId);
     if (onLoanClick) {
       const loanId =
         loan.id || loan.loanId || `loan-${loan.personName}-${Date.now()}`;
-      console.log("Calling onLoanClick with ID:", loanId); // Add debug log
       onLoanClick(loanId);
     }
   };

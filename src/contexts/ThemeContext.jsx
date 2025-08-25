@@ -18,7 +18,6 @@ const getInitialTheme = () => {
 
   try {
     const savedTheme = localStorage.getItem("loantracker-theme");
-    console.log("Saved theme from localStorage:", savedTheme); // Debug log
 
     if (savedTheme !== null) {
       return savedTheme === "dark";
@@ -39,7 +38,6 @@ export const ThemeProvider = ({ children }) => {
   // Initialize theme on mount
   useEffect(() => {
     const initialTheme = getInitialTheme();
-    console.log("Initial theme on mount:", initialTheme ? "dark" : "light"); // Debug log
     setIsDarkMode(initialTheme);
     setIsInitialized(true);
 
@@ -54,7 +52,6 @@ export const ThemeProvider = ({ children }) => {
     try {
       const themeValue = isDarkMode ? "dark" : "light";
       localStorage.setItem("loantracker-theme", themeValue);
-      console.log("Theme saved to localStorage:", themeValue); // Debug log
 
       // Apply theme class to document root
       document.documentElement.className = themeValue;
@@ -64,7 +61,6 @@ export const ThemeProvider = ({ children }) => {
   }, [isDarkMode, isInitialized]);
 
   const toggleTheme = () => {
-    console.log("Toggling theme from:", isDarkMode ? "dark" : "light"); // Debug log
     setIsDarkMode((prev) => !prev);
   };
 
