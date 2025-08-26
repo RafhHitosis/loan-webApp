@@ -78,7 +78,7 @@ const PaymentHistory = ({ payments = {}, loan, onDeletePayment }) => {
       <div className="space-y-2">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className={`w-full flex items-center justify-between p-2 ${colors.background.elevated} ${colors.interactive.hover} rounded-lg transition-colors duration-200`}
+          className={`w-full flex items-center justify-between p-3 ${colors.background.elevated} ${colors.interactive.hover} rounded-lg transition-colors duration-200 ${colors.border.primary} border`}
         >
           <div className="flex items-center gap-2">
             <History className={`w-4 h-4 ${colors.text.secondary}`} />

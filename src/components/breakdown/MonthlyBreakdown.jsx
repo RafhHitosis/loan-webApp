@@ -72,8 +72,8 @@ const MonthlyBreakdown = ({ loan }) => {
           <Calendar className={`w-4 h-4 ${colors.text.secondary}`} />
           <span className={`${colors.text.primary} font-medium text-sm`}>
             {loan.interestRate === 0
-              ? `Payment Plan - Interest Free (${paidMonths}/${totalMonths} paid)`
-              : `GLoan Payment Formula (${paidMonths}/${totalMonths} paid)`}
+              ? `Monthly (0% Interest) (${paidMonths}/${totalMonths} paid)`
+              : `Monthly Payment (${paidMonths}/${totalMonths} paid)`}
           </span>
         </div>
         {isExpanded ? (

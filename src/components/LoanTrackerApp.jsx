@@ -22,6 +22,81 @@ import { useLoansData } from "../hooks/useLoansData";
 import { useLoanOperations } from "../hooks/useLoanOperations";
 import { useScrollOperations } from "../hooks/useScrollOperations";
 
+// Smooth scroll animation utility
+const smoothScrollTo = (element, targetScrollTop, duration = 800) => {
+  return new Promise((resolve) => {
+    const startScrollTop = element.scrollTop;
+    const distance = targetScrollTop - startScrollTop;
+    const startTime = performance.now();
+
+    const animateScroll = (currentTime) => {
+      const elapsedTime = currentTime - startTime;
+      const progress = Math.min(elapsedTime / duration, 1);
+
+      // Easing function for smooth animation (ease-out)
+      const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+
+      element.scrollTop = startScrollTop + distance * easeOutCubic;
+
+      if (progress < 1) {
+        requestAnimationFrame(animateScroll);
+      } else {
+        resolve();
+      }
+    };
+
+    requestAnimationFrame(animateScroll);
+  });
+};
+
+// Individual ScrollContainer component
+const ScrollContainer = ({
+  children,
+  page,
+  isActive,
+  onScroll,
+  scrollRefs,
+  scrollPositions,
+}) => {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      scrollRefs.current[page] = containerRef.current;
+    }
+  }, [page, scrollRefs]);
+
+  useEffect(() => {
+    if (isActive && containerRef.current) {
+      // Restore scroll position immediately when page becomes active
+      const savedPosition = scrollPositions.current[page] || 0;
+      containerRef.current.scrollTop = savedPosition;
+    }
+  }, [isActive, page, scrollPositions]);
+
+  const handleScroll = (e) => {
+    // Save scroll position immediately as user scrolls
+    scrollPositions.current[page] = e.target.scrollTop;
+    if (onScroll) {
+      onScroll(e);
+    }
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      className={`h-full overflow-y-auto ${isActive ? "block" : "hidden"}`}
+      onScroll={handleScroll}
+      style={{
+        height: "calc(100vh - 140px)", // Adjust based on your header/footer height
+        overscrollBehavior: "contain",
+      }}
+    >
+      {children}
+    </div>
+  );
+};
+
 // Simplified and optimized swipe navigation hook with modal awareness
 const useSwipeNavigation = (currentView, setCurrentView, isAnyModalOpen) => {
   const touchStartX = useRef(null);
@@ -30,80 +105,94 @@ const useSwipeNavigation = (currentView, setCurrentView, isAnyModalOpen) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationClass, setAnimationClass] = useState("");
 
-  // Define the page order for navigation
-  const pageOrder = ["dashboard", "loans", "profile"];
+  // Define the page order for navigation (memoized)
+  const pageOrder = React.useMemo(() => ["dashboard", "loans", "profile"], []);
 
-  const handleTouchStart = (e) => {
-    // Don't start swipe if any modal is open or already animating
-    if (e.touches.length !== 1 || isAnimating || isAnyModalOpen) return;
+  const handleTouchStart = React.useCallback(
+    (e) => {
+      // Don't start swipe if any modal is open or already animating
+      if (e.touches.length !== 1 || isAnimating || isAnyModalOpen) return;
 
-    const touch = e.touches[0];
-    touchStartX.current = touch.clientX;
-    touchStartY.current = touch.clientY;
-  };
+      const touch = e.touches[0];
+      touchStartX.current = touch.clientX;
+      touchStartY.current = touch.clientY;
+    },
+    [isAnimating, isAnyModalOpen]
+  );
 
-  const handleTouchEnd = (e) => {
-    // Don't process swipe if any modal is open
-    if (
-      !touchStartX.current ||
-      !touchStartY.current ||
-      isAnimating ||
-      isAnyModalOpen
-    )
-      return;
-    if (e.changedTouches.length !== 1) return;
+  const handleTouchEnd = React.useCallback(
+    (e) => {
+      // Don't process swipe if any modal is open
+      if (
+        !touchStartX.current ||
+        !touchStartY.current ||
+        isAnimating ||
+        isAnyModalOpen
+      )
+        return;
+      if (e.changedTouches.length !== 1) return;
 
-    const touch = e.changedTouches[0];
-    const deltaX = touch.clientX - touchStartX.current;
-    const deltaY = touch.clientY - touchStartY.current;
+      const touch = e.changedTouches[0];
+      const deltaX = touch.clientX - touchStartX.current;
+      const deltaY = touch.clientY - touchStartY.current;
 
-    // Reset touch coordinates
-    touchStartX.current = null;
-    touchStartY.current = null;
+      // Reset touch coordinates
+      touchStartX.current = null;
+      touchStartY.current = null;
 
-    // Check if it's a valid horizontal swipe
-    const minSwipeDistance = 50;
-    const maxVerticalDistance = 80;
+      // Check if it's a valid horizontal swipe
+      const minSwipeDistance = 50;
+      const maxVerticalDistance = 80;
 
-    if (
-      Math.abs(deltaX) > minSwipeDistance &&
-      Math.abs(deltaY) < maxVerticalDistance &&
-      Math.abs(deltaX) > Math.abs(deltaY)
-    ) {
-      const currentIndex = pageOrder.indexOf(currentView);
-      let targetIndex = currentIndex;
+      if (
+        Math.abs(deltaX) > minSwipeDistance &&
+        Math.abs(deltaY) < maxVerticalDistance &&
+        Math.abs(deltaX) > Math.abs(deltaY)
+      ) {
+        const currentIndex = pageOrder.indexOf(currentView);
+        let targetIndex = currentIndex;
 
-      if (deltaX > 0 && currentIndex > 0) {
-        // Swipe right - go to previous page
-        targetIndex = currentIndex - 1;
-      } else if (deltaX < 0 && currentIndex < pageOrder.length - 1) {
-        // Swipe left - go to next page
-        targetIndex = currentIndex + 1;
-      }
-
-      if (targetIndex !== currentIndex) {
-        setIsAnimating(true);
-
-        // Set animation class based on swipe direction
-        if (deltaX > 0) {
-          // Swiped right - going to previous page
-          setAnimationClass("slide-right");
-        } else {
-          // Swiped left - going to next page
-          setAnimationClass("slide-left");
+        if (deltaX > 0 && currentIndex > 0) {
+          // Swipe right - go to previous page
+          targetIndex = currentIndex - 1;
+        } else if (deltaX < 0 && currentIndex < pageOrder.length - 1) {
+          // Swipe left - go to next page
+          targetIndex = currentIndex + 1;
         }
 
-        // Change view immediately
-        setCurrentView(pageOrder[targetIndex]);
+        if (targetIndex !== currentIndex) {
+          setIsAnimating(true);
 
-        // Clear animation after transition completes
-        setTimeout(() => {
-          setIsAnimating(false);
-          setAnimationClass("");
-        }, 300);
+          // Set animation class based on swipe direction
+          if (deltaX > 0) {
+            // Swiped right - going to previous page
+            setAnimationClass("slide-right");
+          } else {
+            // Swiped left - going to next page
+            setAnimationClass("slide-left");
+          }
+
+          // Change view immediately
+          setCurrentView(pageOrder[targetIndex]);
+
+          // Clear animation after transition completes
+          setTimeout(() => {
+            setIsAnimating(false);
+            setAnimationClass("");
+          }, 300);
+        }
       }
-    }
-  };
+    },
+    [
+      isAnimating,
+      isAnyModalOpen,
+      currentView,
+      pageOrder,
+      setIsAnimating,
+      setAnimationClass,
+      setCurrentView,
+    ]
+  );
 
   useEffect(() => {
     const container = swipeContainerRef.current;
@@ -118,7 +207,13 @@ const useSwipeNavigation = (currentView, setCurrentView, isAnyModalOpen) => {
       container.removeEventListener("touchstart", handleTouchStart);
       container.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [currentView, isAnimating, isAnyModalOpen]); // Added isAnyModalOpen to dependencies
+  }, [
+    currentView,
+    isAnimating,
+    isAnyModalOpen,
+    handleTouchStart,
+    handleTouchEnd,
+  ]);
 
   return { swipeContainerRef, isAnimating, animationClass };
 };
@@ -127,6 +222,20 @@ const LoanTrackerApp = () => {
   const { user, signOut } = useAuth();
   const { colors } = useTheme();
   const [currentView, setCurrentView] = useState("dashboard");
+
+  // Updated scroll management state
+  const [hasInitialScrolled, setHasInitialScrolled] = useState(false);
+  const [isDashboardScrolling, setIsDashboardScrolling] = useState(false);
+  const scrollRefs = useRef({
+    dashboard: null,
+    loans: null,
+    profile: null,
+  });
+  const scrollPositions = useRef({
+    dashboard: 0,
+    loans: 0,
+    profile: 0,
+  });
 
   // Custom hooks
   const { notification, showNotification, clearNotification } =
@@ -165,7 +274,7 @@ const LoanTrackerApp = () => {
   const { swipeContainerRef, isAnimating, animationClass } = useSwipeNavigation(
     currentView,
     setCurrentView,
-    isAnyModalOpen // Pass modal state to hook
+    isAnyModalOpen
   );
 
   const {
@@ -196,20 +305,58 @@ const LoanTrackerApp = () => {
     setCurrentView
   );
 
-  // Auto-scroll to bottom on app load (mobile view)
+  // Enhanced handle initial dashboard scroll with animation
   useEffect(() => {
-    if (user) {
+    if (user && !hasInitialScrolled && currentView === "dashboard") {
       const isMobile = window.innerWidth <= 768;
       if (isMobile) {
-        setTimeout(() => {
-          window.scrollTo({
-            top: document.body.scrollHeight,
-            behavior: "smooth",
-          });
-        }, 300);
+        // Add a longer delay to ensure the dashboard is fully rendered
+        setTimeout(async () => {
+          const dashboardContainer = scrollRefs.current.dashboard;
+          if (dashboardContainer) {
+            const scrollHeight = dashboardContainer.scrollHeight;
+            const containerHeight = dashboardContainer.clientHeight;
+            const maxScroll = scrollHeight - containerHeight;
+
+            // Only scroll if there's content to scroll to
+            if (maxScroll > 0) {
+              setIsDashboardScrolling(true);
+
+              // Animate scroll to bottom
+              await smoothScrollTo(dashboardContainer, maxScroll, 1000);
+
+              // Update stored scroll position
+              scrollPositions.current.dashboard = maxScroll;
+              setIsDashboardScrolling(false);
+            }
+          }
+          setHasInitialScrolled(true);
+        }, 500); // Increased delay to ensure content is loaded
+      } else {
+        setHasInitialScrolled(true);
       }
     }
-  }, [user]);
+  }, [user, hasInitialScrolled, currentView, loans.length]); // Added loans.length as dependency
+
+  // Initialize other pages to top
+  useEffect(() => {
+    if (user && hasInitialScrolled) {
+      const isMobile = window.innerWidth <= 768;
+      if (isMobile) {
+        ["loans", "profile"].forEach((page) => {
+          if (scrollPositions.current[page] === undefined) {
+            scrollPositions.current[page] = 0;
+          }
+        });
+      }
+    }
+  }, [user, hasInitialScrolled]);
+
+  // Simplified handleViewChange - no manual scroll management needed
+  const handleViewChange = (newView) => {
+    // No need to manually save scroll position - it's handled by ScrollContainer
+    setCurrentView(newView);
+  };
 
   // Event handlers
   const handleEditLoan = (loan) => {
@@ -342,63 +489,99 @@ const LoanTrackerApp = () => {
 
       {/* Main Content Container with Swipe Navigation */}
       <div className="relative overflow-hidden">
-        <main
+        <div
           ref={swipeContainerRef}
-          className={`px-4 py-6 pb-24 ${isAnimating ? animationClass : ""}`}
+          className={`${isAnimating ? animationClass : ""}`}
           style={{
             touchAction: "pan-y",
             overscrollBehavior: "contain",
           }}
         >
-          {currentView === "dashboard" && (
-            <Dashboard
-              loans={loans}
-              onAddLoan={() => {
-                setEditingLoan(null);
-                openLoanForm();
-              }}
-            />
-          )}
+          {/* Updated main content area with ScrollContainer - Consistent spacing */}
+          <div className="relative" style={{ height: "calc(100vh - 140px)" }}>
+            <ScrollContainer
+              page="dashboard"
+              isActive={currentView === "dashboard"}
+              scrollRefs={scrollRefs}
+              scrollPositions={scrollPositions}
+            >
+              <div className="px-5 pt-5 pb-12 space-y-5 relative">
+                {/* Loading indicator for dashboard scrolling */}
+                {isDashboardScrolling && (
+                  <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50">
+                    <div
+                      className={`${colors.background.secondary} rounded-lg p-4 shadow-lg border ${colors.border.primary} flex items-center space-x-3`}
+                    >
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                      <span className={`${colors.text.secondary} text-sm`}>
+                        Loading dashboard...
+                      </span>
+                    </div>
+                  </div>
+                )}
 
-          {currentView === "loans" && (
-            <div className="space-y-4">
-              <FilterSearchBar
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                filters={filters}
-                setFilters={setFilters}
-                loans={loans}
-                filteredLoans={filteredLoans}
-                onAddLoan={() => {
-                  setEditingLoan(null);
-                  openLoanForm();
-                }}
-                onExportSuccess={handleExportSuccess}
-                onExportError={handleExportError}
-              />
-              <DueDateWarning loans={loans} onLoanClick={scrollToLoan} />
-              <LoanList
-                loans={filteredLoans}
-                onEdit={handleEditLoan}
-                onDelete={initiateDelete}
-                onUploadProof={handleUploadProof}
-                onAddManualReceipt={handleAddManualReceipt}
-                onDeletePayment={handleDeletePayment}
-                highlightedLoanId={highlightedLoanId}
-              />
-            </div>
-          )}
+                <Dashboard
+                  loans={loans}
+                  onAddLoan={() => {
+                    setEditingLoan(null);
+                    openLoanForm();
+                  }}
+                />
+              </div>
+            </ScrollContainer>
 
-          {currentView === "profile" && (
-            <Profile onModalStateChange={setProfileModalOpen} />
-          )}
-        </main>
+            <ScrollContainer
+              page="loans"
+              isActive={currentView === "loans"}
+              scrollRefs={scrollRefs}
+              scrollPositions={scrollPositions}
+            >
+              <div className="px-5 pt-5 pb-12 space-y-5">
+                <FilterSearchBar
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                  filters={filters}
+                  setFilters={setFilters}
+                  loans={loans}
+                  filteredLoans={filteredLoans}
+                  onAddLoan={() => {
+                    setEditingLoan(null);
+                    openLoanForm();
+                  }}
+                  onExportSuccess={handleExportSuccess}
+                  onExportError={handleExportError}
+                />
+                <DueDateWarning loans={loans} onLoanClick={scrollToLoan} />
+                <LoanList
+                  loans={filteredLoans}
+                  onEdit={handleEditLoan}
+                  onDelete={initiateDelete}
+                  onUploadProof={handleUploadProof}
+                  onAddManualReceipt={handleAddManualReceipt}
+                  onDeletePayment={handleDeletePayment}
+                  highlightedLoanId={highlightedLoanId}
+                />
+              </div>
+            </ScrollContainer>
+
+            <ScrollContainer
+              page="profile"
+              isActive={currentView === "profile"}
+              scrollRefs={scrollRefs}
+              scrollPositions={scrollPositions}
+            >
+              <div className="px-5 pt-5 pb-12 space-y-5">
+                <Profile onModalStateChange={setProfileModalOpen} />
+              </div>
+            </ScrollContainer>
+          </div>
+        </div>
       </div>
 
       {/* Bottom Navigation - Always visible */}
       <BottomNavigation
         currentView={currentView}
-        onViewChange={setCurrentView}
+        onViewChange={handleViewChange}
       />
 
       {/* Modals */}

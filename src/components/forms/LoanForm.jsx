@@ -408,19 +408,36 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                     <div className="flex items-center gap-2">
                       <input
                         type="number"
-                        value={
-                          interestRate === 0
-                            ? "0"
-                            : (interestRate * 100).toFixed(2)
-                        }
+                        value={(() => {
+                          // Fix floating point precision issues
+                          const percentage =
+                            Math.round(interestRate * 10000) / 100;
+                          return percentage === 0 ? "0" : percentage.toString();
+                        })()}
                         onChange={(e) => {
-                          const value = parseFloat(e.target.value) || 0;
-                          updateInterestRate(value / 100);
+                          const inputValue = e.target.value;
+                          // Allow empty input for better typing experience
+                          if (inputValue === "") {
+                            updateInterestRate(0);
+                            return;
+                          }
+
+                          const value = parseFloat(inputValue);
+                          // Only update if it's a valid number
+                          if (!isNaN(value) && value >= 0 && value <= 20) {
+                            updateInterestRate(value / 100);
+                          }
+                        }}
+                        onFocus={(e) => {
+                          // Select all text when focused for easier editing on mobile
+                          e.target.select();
                         }}
                         className={`w-20 px-2 py-1 ${colors.background.elevated} border ${colors.border.primary} rounded-lg ${colors.text.primary} text-sm text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50`}
                         step="0.01"
                         min="0"
                         max="20"
+                        inputMode="decimal" // Better mobile keyboard
+                        pattern="[0-9]*\.?[0-9]*" // Mobile numeric keyboard with decimal
                       />
                       <span className={`${colors.text.tertiary} text-sm`}>
                         %
@@ -428,7 +445,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                     </div>
                   </div>
 
-                  {/* Range Slider - Updated for finer control */}
+                  {/* Range Slider - Updated for better mobile interaction */}
                   <input
                     type="range"
                     min="0"
@@ -438,7 +455,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                     onChange={(e) =>
                       updateInterestRate(parseFloat(e.target.value) / 100)
                     }
-                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer touch-manipulation slider-custom"
                     style={{
                       background: `linear-gradient(to right, ${
                         interestRate === 0 ? "#3b82f6" : "#10b981"
@@ -447,6 +464,7 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                       }%, #475569 ${interestRate * 100 * 5}%, #475569 100%)`,
                     }}
                   />
+
                   <div
                     className={`flex justify-between text-xs ${colors.text.tertiary} mt-1`}
                   >
@@ -454,11 +472,15 @@ const LoanForm = ({ loan, open, onClose, onSave }) => {
                     <span>20%</span>
                   </div>
 
-                  {/* Display exact percentage */}
+                  {/* Display exact percentage with better mobile formatting */}
                   <div
                     className={`text-center text-xs ${colors.text.tertiary} mt-1`}
                   >
-                    Current: {(interestRate * 100).toFixed(2)}% monthly
+                    Current:{" "}
+                    <span className="font-medium">
+                      {Math.round(interestRate * 10000) / 100}%
+                    </span>{" "}
+                    monthly
                   </div>
                 </div>
 

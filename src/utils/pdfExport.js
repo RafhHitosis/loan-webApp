@@ -1023,28 +1023,10 @@ export const exportLoansToPDF = async (loans, isDarkMode, user) => {
         yPosition = doc.lastAutoTable.finalY + 15;
       }
 
-      // Add compact separator between loans (except for last loan)
-      // Enhanced separator between loans
       if (index < loans.length - 1) {
-        // Check if we need a new page before adding separator
-        if (yPosition > pageHeight - 50) {
-          doc.addPage();
-          yPosition = 25;
-        } else {
-          // Add decorative separator
-          doc.setFillColor(75, 160, 80);
-          doc.rect(margin, yPosition + 5, pageWidth - 2 * margin, 1, "F");
-
-          // Add loan number indicator for next loan
-          doc.setTextColor(...colors.lightText);
-          doc.setFontSize(8);
-          doc.setFont("helvetica", "italic");
-          const nextLoanText = `End of Loan ${index + 1}`;
-          const textWidth = doc.getTextWidth(nextLoanText);
-          doc.text(nextLoanText, (pageWidth - textWidth) / 2, yPosition + 12);
-
-          yPosition += 35;
-        }
+        // Always start the next loan on a new page
+        doc.addPage();
+        yPosition = 25;
       }
     });
 

@@ -25,3 +25,34 @@
     transform: translateX(0);
   }
 }
+
+/* style for loan form interest */
+.slider-custom::-webkit-slider-thumb {
+  appearance: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: #10b981;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.slider-custom::-moz-range-thumb {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: #10b981;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border: none;
+}
+
+.slider-custom[data-zero="true"]::-webkit-slider-thumb {
+  background: #3b82f6;
+}
+
+.slider-custom[data-zero="true"]::-moz-range-thumb {
+  background: #3b82f6;
+}

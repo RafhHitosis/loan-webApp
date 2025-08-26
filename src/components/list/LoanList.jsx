@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import getDueDateStatus from "../indicators/getDueDateStatus";
 import Card from "../common/Card";
 import PaymentHistory from "../payment/PaymentHistory";
@@ -10,6 +10,7 @@ import {
   FileImage,
   X,
   CreditCard,
+  ChevronUp,
 } from "lucide-react";
 import MonthlyBreakdown from "../breakdown/MonthlyBreakdown";
 import { updateBreakdownPayments } from "../../utils/loanCalculations";
@@ -126,6 +127,77 @@ const PaymentOptionsModal = ({
         </div>
       </div>
     </div>
+  );
+};
+
+const ScrollToTopButton = () => {
+  const { colors } = useTheme();
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const toggleVisibility = () => {
+      // Show button when page is scrolled up to given distance
+      if (window.pageYOffset > 300) {
+        setIsVisible(true);
+      } else {
+        setIsVisible(false);
+      }
+    };
+
+    window.addEventListener("scroll", toggleVisibility);
+    return () => window.removeEventListener("scroll", toggleVisibility);
+  }, []);
+
+  const scrollToTop = () => {
+    const loansContainer = document.querySelector("[data-loans-container]");
+    if (loansContainer) {
+      loansContainer.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    } else {
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    }
+  };
+
+  if (!isVisible) return null;
+
+  return (
+    <button
+      onClick={scrollToTop}
+      className={`
+        fixed bottom-6 right-6 z-40
+        w-12 h-12
+        ${colors.background.card}
+        ${colors.border.primary}
+        border
+        rounded-full
+        shadow-lg hover:shadow-xl
+        backdrop-blur-sm
+        ${colors.interactive.hover}
+        transition-all duration-300
+        group
+        animate-in slide-in-from-bottom-2
+        hover:scale-110
+        active:scale-95
+      `}
+      title="Scroll to top"
+      aria-label="Scroll to top"
+    >
+      <ChevronUp
+        className={`
+          w-5 h-5 
+          ${colors.text.primary} 
+          group-hover:text-emerald-400
+          transition-colors duration-200
+          mx-auto
+        `}
+      />
+      <div className="absolute inset-0 rounded-full bg-gradient-to-t from-emerald-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+    </button>
   );
 };
 
@@ -488,7 +560,59 @@ const LoanList = ({
             </Card>
           );
         })}
+
+        {/* Show scroll to top button only when there are more than 6 loans */}
+        {loans.length > 6 && (
+          <div className="flex justify-center pt-6 pb-2">
+            <button
+              onClick={() => {
+                const loansContainer = document.querySelector(
+                  "[data-loans-container]"
+                );
+                if (loansContainer) {
+                  loansContainer.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+                } else {
+                  window.scrollTo({
+                    top: 0,
+                    behavior: "smooth",
+                  });
+                }
+              }}
+              className={`
+                inline-flex items-center gap-2 px-4 py-2.5
+                ${colors.background.card}
+                ${colors.border.primary}
+                border
+                rounded-full
+                ${colors.text.secondary}
+                hover:${colors.text.primary}
+                ${colors.interactive.hover}
+                transition-all duration-200
+                text-sm font-medium
+                shadow-lg hover:shadow-xl
+                backdrop-blur-sm
+                group
+                hover:scale-105
+                active:scale-95
+              `}
+              title="Scroll to top of loan list"
+              aria-label="Scroll to top of loan list"
+            >
+              <ChevronUp className="w-4 h-4 group-hover:text-emerald-400 transition-colors duration-200" />
+              <span className="group-hover:text-emerald-400 transition-colors duration-200">
+                Back to top
+              </span>
+              <div className="absolute inset-0 rounded-full bg-gradient-to-r from-emerald-500/10 to-emerald-400/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Floating scroll to top button for when scrolled down */}
+      {loans.length > 6 && <ScrollToTopButton />}
 
       <PaymentOptionsModal
         loan={paymentModalLoan}
