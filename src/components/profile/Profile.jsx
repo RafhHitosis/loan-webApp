@@ -217,7 +217,7 @@ const Profile = ({ onModalStateChange }) => {
                     Change Password
                   </h3>
                   <p className={`text-sm ${colors.text.tertiary}`}>
-                    Update your account password
+                    Update your password
                   </p>
                 </div>
               </div>

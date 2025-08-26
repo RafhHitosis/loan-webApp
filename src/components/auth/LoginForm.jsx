@@ -353,7 +353,7 @@ const LoginForm = () => {
                         error.toLowerCase().includes("account"))
                     }
                     variant="default"
-                    className="backdrop-blur-md border-white/10 hover:border-white/20 focus:shadow-lg focus:shadow-emerald-500/10 focus:scale-102 transition-all duration-300 text-sm py-3.5"
+                    className="backdrop-blur-md border-white/10 hover:border-white/20 focus:shadow-lg focus:shadow-emerald-500/10 focus:scale-100 transition-all duration-300 text-sm py-3.5"
                     required
                     autoComplete="email"
                     maxLength="254"
@@ -372,7 +372,7 @@ const LoginForm = () => {
                     icon={Lock}
                     error={error && error.toLowerCase().includes("password")}
                     variant="default"
-                    className="backdrop-blur-md border-white/10 hover:border-white/20 focus:shadow-lg focus:shadow-emerald-500/10 focus:scale-102 transition-all duration-300 text-sm py-3.5 pr-12"
+                    className="backdrop-blur-md border-white/10 hover:border-white/20 focus:shadow-lg focus:shadow-emerald-500/10 focus:scale-100 transition-all duration-300 text-sm py-3.5 pr-12"
                     required
                     autoComplete={
                       isSignUp ? "new-password" : "current-password"

@@ -25,7 +25,7 @@ const FilterSearchBar = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const { colors } = useTheme();
+  const { isDarkMode, colors } = useTheme();
   const { user } = useAuth();
 
   // Calculate filter counts
@@ -131,11 +131,15 @@ const FilterSearchBar = ({
         {/* Search Toggle */}
         <button
           onClick={() => setShowSearch(!showSearch)}
-          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 ${
-            showSearch || searchQuery
-              ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-              : `${colors.background.elevated} ${colors.text.tertiary} hover:${colors.text.secondary} ${colors.interactive.hover}`
-          }`}
+          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200
+    border ${colors.border.primary} shadow-sm hover:shadow-md
+    ${
+      showSearch || searchQuery
+        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+        : isDarkMode
+        ? "bg-slate-700/50 hover:bg-slate-600/50 text-gray-400 hover:text-emerald-400"
+        : "bg-white hover:bg-gray-300 text-gray-700 hover:text-emerald-500"
+    }`}
           title="Search loans"
         >
           <Search className="w-4 h-4" />
@@ -144,11 +148,15 @@ const FilterSearchBar = ({
         {/* Filter Toggle */}
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 ${
-            isExpanded || hasActiveFilters
-              ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-              : `${colors.background.elevated} ${colors.text.tertiary} hover:${colors.text.secondary} ${colors.interactive.hover}`
-          }`}
+          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200
+    border ${colors.border.primary} shadow-sm hover:shadow-md
+    ${
+      isExpanded || hasActiveFilters
+        ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+        : isDarkMode
+        ? "bg-slate-700/50 hover:bg-slate-600/50 text-gray-400 hover:text-blue-400"
+        : "bg-white hover:bg-gray-300 text-gray-700 hover:text-blue-500"
+    }`}
           title="Filter loans"
         >
           <Filter className="w-4 h-4" />
