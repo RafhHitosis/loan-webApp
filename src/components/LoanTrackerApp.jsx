@@ -49,7 +49,54 @@ const smoothScrollTo = (element, targetScrollTop, duration = 800) => {
   });
 };
 
-// Individual ScrollContainer component
+// Custom hook for dynamic viewport height
+const useViewportHeight = () => {
+  const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
+
+  useEffect(() => {
+    // Function to update viewport height
+    const updateViewportHeight = () => {
+      // Use the visual viewport if available (better for mobile)
+      const height = window.visualViewport
+        ? window.visualViewport.height
+        : window.innerHeight;
+      setViewportHeight(height);
+
+      // Update CSS custom property for dynamic viewport height
+      document.documentElement.style.setProperty("--vh", `${height * 0.01}px`);
+    };
+
+    // Initial setup
+    updateViewportHeight();
+
+    // Listen for viewport changes
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", updateViewportHeight);
+    } else {
+      window.addEventListener("resize", updateViewportHeight);
+      // Also listen for orientation changes on mobile
+      window.addEventListener("orientationchange", () => {
+        setTimeout(updateViewportHeight, 100);
+      });
+    }
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener(
+          "resize",
+          updateViewportHeight
+        );
+      } else {
+        window.removeEventListener("resize", updateViewportHeight);
+        window.removeEventListener("orientationchange", updateViewportHeight);
+      }
+    };
+  }, []);
+
+  return viewportHeight;
+};
+
+// Individual ScrollContainer component with dynamic height
 const ScrollContainer = ({
   children,
   page,
@@ -57,6 +104,7 @@ const ScrollContainer = ({
   onScroll,
   scrollRefs,
   scrollPositions,
+  viewportHeight,
 }) => {
   const containerRef = useRef(null);
 
@@ -82,14 +130,18 @@ const ScrollContainer = ({
     }
   };
 
+  // Calculate dynamic height: viewport - header (estimated 70px) - bottom nav (estimated 70px)
+  const containerHeight = Math.max(viewportHeight - 140, 300); // Minimum 300px height
+
   return (
     <div
       ref={containerRef}
-      className={`h-full overflow-y-auto ${isActive ? "block" : "hidden"}`}
+      className={`overflow-y-auto ${isActive ? "block" : "hidden"}`}
       onScroll={handleScroll}
       style={{
-        height: "calc(100vh - 140px)", // Adjust based on your header/footer height
+        height: `${containerHeight}px`,
         overscrollBehavior: "contain",
+        WebkitOverflowScrolling: "touch", // Smooth scrolling on iOS
       }}
     >
       {children}
@@ -222,6 +274,9 @@ const LoanTrackerApp = () => {
   const { user, signOut } = useAuth();
   const { colors } = useTheme();
   const [currentView, setCurrentView] = useState("dashboard");
+
+  // Use dynamic viewport height
+  const viewportHeight = useViewportHeight();
 
   // Updated scroll management state
   const [hasInitialScrolled, setHasInitialScrolled] = useState(false);
@@ -483,27 +538,38 @@ const LoanTrackerApp = () => {
   }
 
   return (
-    <div className={`min-h-screen ${colors.background.primary}`}>
-      {/* Header */}
-      <AppHeader user={user} onLogout={openLogoutConfirm} />
+    <div
+      className={`${colors.background.primary}`}
+      style={{
+        height: `${viewportHeight}px`,
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* Header - Fixed height */}
+      <div className="flex-shrink-0">
+        <AppHeader user={user} onLogout={openLogoutConfirm} />
+      </div>
 
-      {/* Main Content Container with Swipe Navigation */}
-      <div className="relative overflow-hidden">
+      {/* Main Content Container with Swipe Navigation - Flexible height */}
+      <div className="flex-1 relative overflow-hidden">
         <div
           ref={swipeContainerRef}
-          className={`${isAnimating ? animationClass : ""}`}
+          className={`h-full ${isAnimating ? animationClass : ""}`}
           style={{
             touchAction: "pan-y",
             overscrollBehavior: "contain",
           }}
         >
-          {/* Updated main content area with ScrollContainer - Consistent spacing */}
-          <div className="relative" style={{ height: "calc(100vh - 140px)" }}>
+          {/* Updated main content area with ScrollContainer */}
+          <div className="h-full relative">
             <ScrollContainer
               page="dashboard"
               isActive={currentView === "dashboard"}
               scrollRefs={scrollRefs}
               scrollPositions={scrollPositions}
+              viewportHeight={viewportHeight}
             >
               <div className="px-5 pt-5 pb-12 space-y-5 relative">
                 {/* Loading indicator for dashboard scrolling */}
@@ -535,6 +601,7 @@ const LoanTrackerApp = () => {
               isActive={currentView === "loans"}
               scrollRefs={scrollRefs}
               scrollPositions={scrollPositions}
+              viewportHeight={viewportHeight}
             >
               <div className="px-5 pt-5 pb-12 space-y-5">
                 <FilterSearchBar
@@ -569,6 +636,7 @@ const LoanTrackerApp = () => {
               isActive={currentView === "profile"}
               scrollRefs={scrollRefs}
               scrollPositions={scrollPositions}
+              viewportHeight={viewportHeight}
             >
               <div className="px-5 pt-5 pb-12 space-y-5">
                 <Profile onModalStateChange={setProfileModalOpen} />
@@ -578,11 +646,13 @@ const LoanTrackerApp = () => {
         </div>
       </div>
 
-      {/* Bottom Navigation - Always visible */}
-      <BottomNavigation
-        currentView={currentView}
-        onViewChange={handleViewChange}
-      />
+      {/* Bottom Navigation - Fixed height */}
+      <div className="flex-shrink-0">
+        <BottomNavigation
+          currentView={currentView}
+          onViewChange={handleViewChange}
+        />
+      </div>
 
       {/* Modals */}
       <LoanForm
