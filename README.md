@@ -32,39 +32,45 @@ A mobile-first loan tracking app to record money lent/borrowed, manage payments,
 🚀 Getting Started
 
 Prerequisites
-Node.js 18+ and npm
+- Node.js 18+ and npm
 
 Install
+```bash
 cd loan-app
 npm install
+```
+
+---
 
 Environment Variables
 
-Create a .env in the root:
+- Create a .env in the root:
 
 ## Firebase
 
-VITE_FIREBASE_API_KEY=your_key
-VITE_FIREBASE_AUTH_DOMAIN=your_domain
-VITE_FIREBASE_DATABASE_URL=your_db_url
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_bucket
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
+- VITE_FIREBASE_API_KEY=your_key
+- VITE_FIREBASE_AUTH_DOMAIN=your_domain
+- VITE_FIREBASE_DATABASE_URL=your_db_url
+- VITE_FIREBASE_PROJECT_ID=your_project_id
+- VITE_FIREBASE_STORAGE_BUCKET=your_bucket
+- VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+- VITE_FIREBASE_APP_ID=your_app_id
 
 ## Cloudinary (optional: for client-side deletion, server recommended)
 
-VITE_CLOUDINARY_API_KEY=your_key
-VITE_CLOUDINARY_API_SECRET=your_secret
+- VITE_CLOUDINARY_API_KEY=your_key
+- VITE_CLOUDINARY_API_SECRET=your_secret
 
-Cloudinary Setup
+## Cloudinary Setup
 
 Edit src/services/cloudinaryService.js:
 
-CLOUDINARY_CLOUD_NAME → your Cloudinary cloud name
-CLOUDINARY_UPLOAD_PRESET → unsigned preset that accepts uploads
+- CLOUDINARY_CLOUD_NAME → your Cloudinary cloud name
+- CLOUDINARY_UPLOAD_PRESET → unsigned preset that accepts uploads
 
 ⚠️ Note: Client-side uploads are supported. For deletion, server-side signatures are recommended.
 
 Run
+```bash
 npm run dev
+```
