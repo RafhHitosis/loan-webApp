@@ -5,40 +5,27 @@ A mobile-first loan tracking app to record money lent/borrowed, manage payments,
 ✨ Features
 
 🔐 Authentication – Firebase email/password login, account enable/disable, profile image, password change
-
 💰 Loans – Create, edit, delete (lent/borrowed), due dates, statuses (active/paid)
-
 📊 Breakdowns – Flat/custom interest, monthly schedules, fees, early settlement handling
-
 🧾 Payments – Upload proof (Cloudinary) or add receipts; prevents over/under payment
-
 📈 Dashboard – Totals, net position, overdue/due soon indicators, recent activity
-
 🔍 Loans List – Search/filter, due badges, per-loan progress & history
-
 📑 PDF Export – Per-loan details + analytics in light/dark themes
-
 📱 Mobile UX – Bottom nav, swipe navigation, installable PWA
 
 🛠 Tech Stack
 
 React 19 + Vite 7
-
 Tailwind CSS
-
 Firebase (Auth + Realtime Database)
-
 Cloudinary (image uploads)
-
 lucide-react (icons)
-
 jsPDF + AutoTable (PDF export)
-
 vite-plugin-pwa (PWA support)
 
 🚀 Getting Started
-Prerequisites
 
+Prerequisites
 Node.js 18+ and npm
 
 Install
